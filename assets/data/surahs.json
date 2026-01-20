@@ -1,0 +1,106 @@
+[
+    {
+        "number": 1,
+        "name": "Al-Fatiha",
+        "englishName": "The Opening",
+        "englishNameTranslation": "The Opening",
+        "numberOfAyahs": 7,
+        "revelationType": "Meccan"
+    },
+    {
+        "number": 2,
+        "name": "Al-Baqarah",
+        "englishName": "The Cow",
+        "englishNameTranslation": "The Cow",
+        "numberOfAyahs": 286,
+        "revelationType": "Medinan"
+    },
+    {
+        "number": 3,
+        "name": "Al-Imran",
+        "englishName": "Family of Imran",
+        "englishNameTranslation": "The Family of Imran",
+        "numberOfAyahs": 200,
+        "revelationType": "Medinan"
+    },
+    {
+        "number": 4,
+        "name": "An-Nisa",
+        "englishName": "The Women",
+        "englishNameTranslation": "The Women",
+        "numberOfAyahs": 176,
+        "revelationType": "Medinan"
+    },
+    {
+        "number": 5,
+        "name": "Al-Ma'idah",
+        "englishName": "The Table Spread",
+        "englishNameTranslation": "The Table Spread",
+        "numberOfAyahs": 120,
+        "revelationType": "Medinan"
+    },
+    {
+        "number": 6,
+        "name": "Al-An'am",
+        "englishName": "The Cattle",
+        "englishNameTranslation": "The Cattle",
+        "numberOfAyahs": 165,
+        "revelationType": "Meccan"
+    },
+    {
+        "number": 7,
+        "name": "Al-A'raf",
+        "englishName": "The Heights",
+        "englishNameTranslation": "The Heights",
+        "numberOfAyahs": 206,
+        "revelationType": "Meccan"
+    },
+    {
+        "number": 8,
+        "name": "Al-Anfal",
+        "englishName": "The Spoils of War",
+        "englishNameTranslation": "The Spoils of War",
+        "numberOfAyahs": 75,
+        "revelationType": "Medinan"
+    },
+    {
+        "number": 9,
+        "name": "At-Tawbah",
+        "englishName": "The Repentance",
+        "englishNameTranslation": "The Repentance",
+        "numberOfAyahs": 129,
+        "revelationType": "Medinan"
+    },
+    {
+        "number": 10,
+        "name": "Yunus",
+        "englishName": "Jonah",
+        "englishNameTranslation": "Jonah",
+        "numberOfAyahs": 109,
+        "revelationType": "Meccan"
+    },
+    {
+        "number": 18,
+        "name": "Al-Kahf",
+        "englishName": "The Cave",
+        "englishNameTranslation": "The Cave",
+        "numberOfAyahs": 110,
+        "revelationType": "Meccan"
+    },
+    {
+        "number": 36,
+        "name": "Ya-Sin",
+        "englishName": "Ya Sin",
+        "englishNameTranslation": "Ya Sin",
+        "numberOfAyahs": 83,
+        "revelationType": "Meccan"
+    },
+    {
+        "number": 67,
+        "name": "Al-Mulk",
+        "englishName": "The Sovereignty",
+        "englishNameTranslation": "The Sovereignty",
+        "numberOfAyahs": 30,
+        "revelationType": "Meccan"
+    }
+]

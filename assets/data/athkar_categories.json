@@ -1,0 +1,32 @@
+[
+    {
+        "id": "morning",
+        "title": "Morning Athkar",
+        "arabicTitle": "أذكار الصباح",
+        "image": "sun"
+    },
+    {
+        "id": "evening",
+        "title": "Evening Athkar",
+        "arabicTitle": "أذكار المساء",
+        "image": "moon"
+    },
+    {
+        "id": "prayer",
+        "title": "After Prayer",
+        "arabicTitle": "أذكار الصلاة",
+        "image": "prayer"
+    },
+    {
+        "id": "sleep",
+        "title": "Before Sleep",
+        "arabicTitle": "أذكار النوم",
+        "image": "bed"
+    },
+    {
+        "id": "wake_up",
+        "title": "Wake Up",
+        "arabicTitle": "أذكار الاستيقاظ",
+        "image": "sun"
+    }
+]

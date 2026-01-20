@@ -1,0 +1,205 @@
+[
+    {
+        "id": "kindness-parents",
+        "title": "Kindness to Parents",
+        "arabicTitle": "بر الوالدين",
+        "category": "family",
+        "icon": "heart",
+        "hadith": "A man came to the Prophet (ﷺ) and said: 'O Messenger of Allah! Who among the people is most deserving of my good companionship?' The Prophet said: 'Your mother.' The man said, 'Then who?' The Prophet said: 'Your mother.' The man asked again, 'Then who?' The Prophet said: 'Your mother.' The man asked again, 'Then who?' The Prophet said: 'Your father.'",
+        "reference": "Sahih al-Bukhari 5971, Sahih Muslim 2548",
+        "explanation": "This hadith emphasizes the immense importance of being kind and dutiful to one's parents, especially the mother. The mother is mentioned three times before the father, highlighting her special status due to the hardships she endures in pregnancy, childbirth, and raising children.",
+        "practical_tips": [
+            "Speak to your parents with respect and gentleness",
+            "Never say 'uff' (a word of disrespect) to them",
+            "Help them with their daily needs",
+            "Make dua for them regularly",
+            "Visit them frequently if you live apart",
+            "Seek their pleasure and forgiveness"
+        ]
+    },
+    {
+        "id": "smile-charity",
+        "title": "Smiling is Charity",
+        "arabicTitle": "التبسم في وجه أخيك صدقة",
+        "category": "character",
+        "icon": "happy",
+        "hadith": "Your smiling in the face of your brother is charity.",
+        "reference": "Jami` at-Tirmidhi 1956",
+        "explanation": "This beautiful hadith teaches us that even simple acts of kindness, like smiling at others, are considered charity in Islam. You don't need wealth to do good - a warm smile can brighten someone's day and earn you reward from Allah.",
+        "practical_tips": [
+            "Greet people with a genuine smile",
+            "Be cheerful and positive in your interactions",
+            "Smile even when you're having a difficult day",
+            "Remember that your smile might be exactly what someone needs",
+            "Make it a habit to smile at family members daily"
+        ]
+    },
+    {
+        "id": "good-neighbor",
+        "title": "Rights of the Neighbor",
+        "arabicTitle": "حق الجار",
+        "category": "social",
+        "icon": "people",
+        "hadith": "Jibreel kept advising me concerning the neighbor until I thought he would make him an heir.",
+        "reference": "Sahih al-Bukhari 6014, Sahih Muslim 2625",
+        "explanation": "This hadith shows how much emphasis Islam places on treating neighbors well. The angel Jibreel repeatedly advised the Prophet about neighbors, showing that good neighborly relations are a fundamental part of faith.",
+        "practical_tips": [
+            "Greet your neighbors warmly",
+            "Share food with them occasionally",
+            "Help them when they need assistance",
+            "Don't harm them with noise, trash, or bad behavior",
+            "Check on elderly or sick neighbors",
+            "Respect their privacy",
+            "Be patient with any inconvenience they may cause"
+        ]
+    },
+    {
+        "id": "seeking-knowledge",
+        "title": "Seeking Knowledge",
+        "arabicTitle": "طلب العلم",
+        "category": "knowledge",
+        "icon": "book",
+        "hadith": "Whoever follows a path in the pursuit of knowledge, Allah will make a path to Paradise easy for him.",
+        "reference": "Sahih Muslim 2699",
+        "explanation": "Islam highly values the pursuit of knowledge, especially religious knowledge. This hadith promises that those who seek knowledge will find their path to Paradise made easier by Allah. Knowledge illuminates the heart and guides us to the right path.",
+        "practical_tips": [
+            "Dedicate time daily to learning about Islam",
+            "Attend Islamic classes or lectures",
+            "Read the Quran with understanding",
+            "Study the life of the Prophet (ﷺ)",
+            "Learn from reliable scholars",
+            "Share beneficial knowledge with others",
+            "Apply what you learn in your daily life"
+        ]
+    },
+    {
+        "id": "truthfulness",
+        "title": "Truthfulness",
+        "arabicTitle": "الصدق",
+        "category": "character",
+        "icon": "checkmark-circle",
+        "hadith": "Truthfulness leads to righteousness, and righteousness leads to Paradise. A man continues to tell the truth until he becomes a truthful person. Falsehood leads to wickedness, and wickedness leads to the Fire. A man continues to tell lies until he is recorded with Allah as a liar.",
+        "reference": "Sahih al-Bukhari 6094, Sahih Muslim 2607",
+        "explanation": "This hadith teaches us that truthfulness is not just about individual acts but becomes a characteristic of a person. Consistent truthfulness leads to Paradise, while persistent lying leads to Hell. Our habits shape our character and ultimate destiny.",
+        "practical_tips": [
+            "Always speak the truth, even if it's difficult",
+            "Avoid exaggeration and embellishment",
+            "Don't make promises you can't keep",
+            "Admit your mistakes honestly",
+            "Teach children the importance of truthfulness",
+            "Remember that Allah knows everything, even if people don't"
+        ]
+    },
+    {
+        "id": "controlling-anger",
+        "title": "Controlling Anger",
+        "arabicTitle": "كظم الغيظ",
+        "category": "character",
+        "icon": "shield",
+        "hadith": "The strong person is not the one who can wrestle someone else down. The strong person is the one who can control himself when he is angry.",
+        "reference": "Sahih al-Bukhari 6114, Sahih Muslim 2609",
+        "explanation": "True strength in Islam is not physical power but the ability to control one's emotions, especially anger. When we're angry, we're most likely to say or do things we'll regret. Self-control is a sign of wisdom and maturity.",
+        "practical_tips": [
+            "When angry, seek refuge in Allah from Satan",
+            "Change your position - if standing, sit; if sitting, lie down",
+            "Perform wudu (ablution) with cold water",
+            "Stay silent until you calm down",
+            "Leave the situation if possible",
+            "Remember the reward for controlling anger",
+            "Think about the consequences before reacting"
+        ]
+    },
+    {
+        "id": "charity",
+        "title": "The Best Charity",
+        "arabicTitle": "أفضل الصدقة",
+        "category": "worship",
+        "icon": "gift",
+        "hadith": "The best charity is that given when you have little.",
+        "reference": "Sunan Ibn Majah 1844",
+        "explanation": "This hadith teaches us that the value of charity is not in the amount but in the sacrifice it represents. Giving when you yourself are in need shows true faith and reliance on Allah. Allah values the sincerity and sacrifice more than the quantity.",
+        "practical_tips": [
+            "Give charity regularly, even if it's a small amount",
+            "Don't wait until you're wealthy to start giving",
+            "Give with sincerity, not for show",
+            "Help those in need around you",
+            "Remember that Allah will replace what you spend",
+            "Charity can be money, time, effort, or kind words"
+        ]
+    },
+    {
+        "id": "prayer-on-time",
+        "title": "Prayer at Its Proper Time",
+        "arabicTitle": "الصلاة على وقتها",
+        "category": "worship",
+        "icon": "time",
+        "hadith": "I asked the Prophet (ﷺ): 'Which deed is most beloved to Allah?' He said: 'Prayer at its proper time.' I asked: 'Then what?' He said: 'Kindness to parents.' I asked: 'Then what?' He said: 'Jihad in the path of Allah.'",
+        "reference": "Sahih al-Bukhari 527, Sahih Muslim 85",
+        "explanation": "This hadith ranks the most beloved deeds to Allah. Praying on time is mentioned first, showing its supreme importance. It demonstrates our commitment to Allah and our discipline in worship. Delaying prayer without valid reason shows negligence.",
+        "practical_tips": [
+            "Pray as soon as you hear the adhan",
+            "Set reminders for prayer times",
+            "Pray in congregation when possible",
+            "Don't delay prayer for worldly matters",
+            "Prepare for prayer before its time",
+            "Make prayer your top priority throughout the day"
+        ]
+    },
+    {
+        "id": "clean-heart",
+        "title": "The Pure Heart",
+        "arabicTitle": "سلامة القلب",
+        "category": "character",
+        "icon": "heart-circle",
+        "hadith": "There is a piece of flesh in the body, if it becomes good (reformed), the whole body becomes good, but if it gets spoiled, the whole body gets spoiled - and that is the heart.",
+        "reference": "Sahih al-Bukhari 52, Sahih Muslim 1599",
+        "explanation": "The heart is the center of our being. A pure heart filled with faith, love for Allah, and good intentions will lead to righteous actions. A corrupted heart filled with envy, hatred, or arrogance will lead to evil deeds. We must constantly purify our hearts.",
+        "practical_tips": [
+            "Regularly examine your intentions",
+            "Remove envy, hatred, and arrogance from your heart",
+            "Fill your heart with love for Allah and His Messenger",
+            "Forgive those who wrong you",
+            "Avoid backbiting and suspicion",
+            "Remember death often to soften the heart",
+            "Recite Quran and make dhikr to purify the heart"
+        ]
+    },
+    {
+        "id": "moderation",
+        "title": "Moderation in Worship",
+        "arabicTitle": "الاقتصاد في العبادة",
+        "category": "worship",
+        "icon": "analytics",
+        "hadith": "The religion is easy, and no one overburdens himself in his religion but he will be unable to continue in that way. So do not be extremists, but try to be near perfection and receive the good tidings that you will be rewarded.",
+        "reference": "Sahih al-Bukhari 39",
+        "explanation": "Islam teaches balance and moderation in all things, including worship. Overburdening yourself with voluntary acts that you can't sustain is not encouraged. It's better to do small consistent acts than large inconsistent ones. Sustainability is key.",
+        "practical_tips": [
+            "Start with small, consistent acts of worship",
+            "Don't overburden yourself with too many voluntary acts",
+            "Be regular in your worship, even if it's little",
+            "Balance worship with worldly responsibilities",
+            "Don't make religion difficult for yourself or others",
+            "Follow the Sunnah in moderation"
+        ]
+    },
+    {
+        "id": "friday-importance",
+        "title": "The Blessed Friday",
+        "arabicTitle": "فضل يوم الجمعة",
+        "category": "worship",
+        "icon": "calendar",
+        "hadith": "The best day on which the sun has risen is Friday. On it Adam was created, on it he entered Paradise, and on it he was expelled from it. And the Hour will not be established except on Friday.",
+        "reference": "Sahih Muslim 854",
+        "explanation": "Friday is the most blessed day of the week for Muslims. It's a day of gathering, worship, and seeking Allah's mercy. The Friday prayer is obligatory for men and highly recommended for women. There is a special hour on Friday when duas are accepted.",
+        "practical_tips": [
+            "Attend Jumu'ah prayer at the mosque",
+            "Take a bath (ghusl) and wear clean clothes",
+            "Apply perfume and dress nicely",
+            "Go early to the mosque",
+            "Recite Surah Al-Kahf",
+            "Send abundant blessings upon the Prophet (ﷺ)",
+            "Make lots of dua, especially in the last hour before Maghrib",
+            "Avoid unnecessary worldly activities during Jumu'ah time"
+        ]
+    }
+]

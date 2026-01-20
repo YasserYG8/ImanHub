@@ -1,0 +1,30 @@
+[
+    {
+        "id": "quranic",
+        "title": "Quranic Duaas",
+        "arabicTitle": "أدعية قرآنية",
+        "icon": "book-outline",
+        "color": "#10B981"
+    },
+    {
+        "id": "prophetic",
+        "title": "Prophetic Duaas",
+        "arabicTitle": "أدعية نبوية",
+        "icon": "sparkles-outline",
+        "color": "#3B82F6"
+    },
+    {
+        "id": "daily",
+        "title": "Daily Life",
+        "arabicTitle": "أدعية حياتية",
+        "icon": "sunny-outline",
+        "color": "#F59E0B"
+    },
+    {
+        "id": "protection",
+        "title": "Protection",
+        "arabicTitle": "أدعية الاستعاذة",
+        "icon": "shield-checkmark-outline",
+        "color": "#EF4444"
+    }
+]
