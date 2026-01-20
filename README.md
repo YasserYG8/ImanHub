@@ -1,80 +1,188 @@
-# Athkar App – Implementation Summary
+# ImanHub – Comprehensive Islamic Companion App
 
-## 📖 Project Overview
-This is a **React Native / Expo** application that provides:
-- Daily **Athkar** (supplications) reminders.
-- **Prayer‑time** notifications.
-- A **Jumu'ah** (Friday) reminder.
-- A **Settings** screen to toggle each notification type and select the calculation method for prayer times.
+## 📖 Overview
 
-## 🛠️ What We Fixed & Added
+**ImanHub** is a feature-rich **React Native / Expo** application designed to be your complete Islamic companion. It provides Muslims with essential daily tools including Quran reading, prayer times, Athkar (supplications), Qibla finder, and much more.
 
-### 1. Notification Behaviour Type Error
-- **Problem**: `expo-notifications` required five properties in the notification handler, but only three were supplied, causing the TypeScript error:
-  ```ts
-  Type 'Promise<{ shouldShowAlert: true; shouldPlaySound: true; shouldSetBadge: false; }>' is not assignable to type 'Promise<NotificationBehavior>'.
-  ```
-- **Fix**: Added `shouldShowBanner: true` and `shouldShowList: true` to the handler.
+---
 
-### 2. Replaced **MMKV** with **AsyncStorage**
-- **Problem**: `MMKV is not a constructor` – MMKV needs native modules and a custom development build, which Expo Go cannot provide.
-- **Solution**:
-  - Created a new `utils/storage.ts` that wraps **@react-native-async-storage/async-storage**.
-  - Implemented async methods (`set`, `getString`, `getNumber`, `getBoolean`, `delete`, `clearAll`).
-  - Added helper `saveItem` / `getItem` for JSON objects.
-  - Updated all imports to use this new storage wrapper.
+## 🏗️ Tech Stack
 
-### 3. Updated Notification Scheduling to Use Async Storage
-- Added `await` to every `storage.getBoolean(...)` call in `utils/notifications.ts`.
-- Ensured the functions remain `async` and now correctly wait for the stored values.
+| Technology | Purpose |
+|------------|---------|
+| **React Native** | Cross-platform mobile framework |
+| **Expo** | Development platform & toolchain |
+| **TypeScript** | Type-safe JavaScript |
+| **Expo Router** | File-based navigation |
+| **React Native Reanimated** | Smooth, performant animations |
+| **AsyncStorage** | Persistent local storage |
+| **expo-location** | GPS & heading for Qibla |
+| **expo-notifications** | Prayer & Athkar reminders |
 
-### 4. Refactored **Settings Screen** (`app/(tabs)/settings.tsx`)
-- Switched from synchronous state initialization to **async loading** via a `useEffect` hook.
-- Made all toggle handlers `async` and used `await storage.set(...)`.
-- Updated the calculation‑method selector to be async as well.
+---
 
-### 5. Miscellaneous Improvements
-- Added a **quick‑start guide** in the README (see below).
-- Provided backup instructions (Git, cloud copy, ZIP archive, Expo export).
-- Updated `package.json` scripts remain unchanged.
+## � Core Features
 
-## 🚀 Quick Start Guide (add this to your README)
+### 🏠 Home Dashboard (`/(tabs)/index`)
+- **Hijri & Gregorian date** display with Arabic month names
+- **Dynamic greeting** based on time of day
+- **Next prayer countdown** with remaining time
+- **Daily Ayah** – inspirational Quran verse
+- **Islamic Events** – upcoming religious occasions & reminders
+- **Continue Reading** – resume Quran from last position
+- **Quick Services** – fast access to key features
+
+### 📖 Quran Reader (`/(tabs)/quran`, `/quran/[id]`)
+- **Dual display modes**: Image-based & text-based reading
+- **604 pages** of authentic Quran text
+- **Surah navigation** with search functionality
+- **Ayah bookmarks** – save and navigate to favorite verses
+- **Tafsir integration** – verse interpretation (~4.5 MB data)
+- **Auto-scroll** to bookmarked positions
+
+### 🕌 Prayer Times (`/(tabs)/prayers`)
+- **Accurate calculations** with multiple methods
+- **Location-based** automatic detection
+- **Next prayer highlighting** with countdown
+- **Configurable calculation methods**
+
+### 🌙 Athkar & Supplications (`/(tabs)/athkar`, `/athkar/[id]`)
+- **Morning Athkar** (أذكار الصباح)
+- **Evening Athkar** (أذكار المساء)
+- **Categorized supplications** with counter
+- **Tasbeeh counter** with haptic feedback
+
+### 🧭 Qibla Finder (`/qibla`)
+- **Compass-based** direction finding
+- **Physics-based animations** – smooth, realistic needle movement
+- **Visual feedback** when aligned with Qibla
+- **True heading** using device magnetometer
+
+### 📍 Mosque Finder (`/mosques`)
+- **Map integration** with `react-native-maps`
+- **OpenStreetMap Overpass API** for mosque data
+- **Configurable search radius**
+- **Distance & direction** to nearby mosques
+
+### 📚 Knowledge Hub (`/knowledge`)
+- **Prophets' Stories** – detailed narratives
+- **Sunnah Teachings** – authentic hadith
+- **Islamic education** content
+
+### 🤖 AI Assistant (`/chatbot`)
+- **Islamic Q&A** chatbot
+- **Knowledge-based** responses
+
+### ⚙️ Settings (`/(tabs)/settings`)
+- **Dark/Light theme** toggle
+- **Notification controls** (prayers, Athkar, Jumu'ah)
+- **Prayer calculation method** selection
+
+---
+
+## 📁 Project Structure
+
+```
+athkar-app/
+├── app/                    # Expo Router screens
+│   ├── (tabs)/             # Tab navigation screens
+│   │   ├── index.tsx       # Home dashboard
+│   │   ├── quran.tsx       # Quran surah list
+│   │   ├── prayers.tsx     # Prayer times
+│   │   ├── athkar.tsx      # Athkar categories
+│   │   └── menu.tsx        # Additional features
+│   ├── athkar/             # Athkar detail screens
+│   ├── quran/              # Quran reader screens
+│   ├── duaa/               # Duaa sections
+│   ├── knowledge/          # Islamic knowledge
+│   ├── mosques/            # Mosque finder
+│   └── qibla.tsx           # Qibla compass
+├── components/             # Reusable UI components
+│   ├── home/               # Home screen components
+│   ├── quran/              # Quran-related components
+│   ├── qibla/              # Compass component
+│   └── ui/                 # Generic UI components
+├── hooks/                  # Custom React hooks
+│   ├── usePrayerTimes.ts   # Prayer time calculations
+│   ├── useHijriDate.ts     # Islamic calendar
+│   ├── useQuran.ts         # Quran data management
+│   └── useThemeColor.ts    # Theme utilities
+├── utils/                  # Utility functions
+│   ├── storage.ts          # AsyncStorage wrapper
+│   ├── notifications.ts    # Notification scheduling
+│   ├── prayerTimes.ts      # Prayer calculations
+│   ├── qibla.ts            # Qibla direction math
+│   ├── quranApi.ts         # Quran data fetching
+│   └── aiService.ts        # AI chatbot service
+├── assets/data/            # JSON data files
+│   ├── quran_text.json     # Full Quran text (~3.9 MB)
+│   ├── quran_tafsir.json   # Tafsir data (~4.5 MB)
+│   ├── athkar_data.json    # Athkar supplications
+│   ├── duaa_data.json      # Duaa collection
+│   ├── prophets_stories.json
+│   └── sunnah_teachings.json
+├── context/                # React Context providers
+│   └── ThemeContext.tsx    # Dark/light theme
+└── constants/              # App constants
+```
+
+---
+
+## 🎨 UI/UX Features
+
+- **🌓 Dark/Light Theme** – Full theme support with context
+- **✨ Premium Glassmorphism** – Blur effects & transparency
+- **🎭 Smooth Animations** – React Native Reanimated powered
+- **🔄 RTL Support** – Full Arabic right-to-left layout
+- **🌈 Gradient Accents** – Beautiful color transitions
+- **👆 Interactive Feedback** – Scale press animations & haptics
+
+---
+
+## 🚀 Quick Start
+
 ```bash
-# 1️⃣ Clone the repo (or pull latest changes)
+# 1️⃣ Clone the repository
 git clone <YOUR_REPO_URL>
 cd athkar-app
 
-# 2️⃣ Install dependencies (once)
+# 2️⃣ Install dependencies
 npm install
 
-# 3️⃣ Start the Expo dev server
-npm run start   # or `expo start`
+# 3️⃣ Start the development server
+npm run start
 
-#   • Press ‘a’ to open on Android emulator/device
-#   • Press ‘i’ to open on iOS simulator
-
-# 4️⃣ Build a development bundle (optional, for offline testing)
-expo export --platform all   # creates a `dist/` folder
+# 4️⃣ Run on device/emulator
+# Press 'a' for Android
+# Press 'i' for iOS
 ```
 
+---
+
 ## 📦 Backup & Version Control
+
 1. **Git** – All source files are tracked. Commit often.
-2. **Remote Repository** – Push to GitHub/GitLab/Bitbucket for cloud safety.
-3. **ZIP Snapshot** – `powershell Compress-Archive -Path . -DestinationPath ..\athkar-app-backup.zip`.
-4. **OneDrive/Google Drive/Dropbox** – Drag the project folder into your synced folder for continuous backup.
-5. **Expo Export** – `expo export` creates a runnable bundle you can store alongside the repo.
-
-## 🧩 How to Continue Tomorrow (or hand off to another model)
-- Pull the latest commit: `git pull`.
-- Run `npm install` (if dependencies changed).
-- Start the dev server with `npm run start`.
-- Continue editing any file – the project is fully functional with AsyncStorage and the fixed notification handler.
-
-## 📚 Further Work (Ideas)
-- Replace AsyncStorage with MMKV again once you switch to a **custom development build** for better performance.
-- Add unit tests for the storage wrapper.
-- Polish UI (dark mode, animations) – the current design already follows the premium aesthetic guidelines.
-- Implement dynamic routing for the Athkar detail pages if not already done.
+2. **Remote Repository** – Push to GitHub/GitLab for cloud backup.
+3. **ZIP Snapshot** – `Compress-Archive -Path . -DestinationPath ../imanhub-backup.zip`
+4. **Cloud Sync** – Use OneDrive/Google Drive for continuous backup.
 
 ---
-*Generated by Antigravity – your AI‑powered coding assistant.*
+
+## 🔮 Future Enhancements
+
+- [ ] MMKV storage for better performance (requires custom build)
+- [ ] Audio recitation for Quran
+- [ ] Widget support for prayer times
+- [ ] Apple Watch / Wear OS companion
+- [ ] Offline mode improvements
+- [ ] Multi-language support
+
+---
+
+## 📄 License
+
+This project is for personal/educational use.
+
+---
+
+*Built with ❤️ for the Muslim community*
