@@ -43,19 +43,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const [currentGradient, setCurrentGradient] = useState<string[]>(PRAYER_GRADIENTS[Prayer.None]);
     const systemColorScheme = useColorScheme();
 
-    // 1. Load Preference
-    useEffect(() => {
-        const loadTheme = async () => {
-            const savedTheme = await storage.getString(KEYS.THEME);
-            if (savedTheme) {
-                setThemeModeState(savedTheme as ThemeType);
-            }
-            // Trigger initial prayer theme calculation
-            updatePrayerTheme();
-        };
-        loadTheme();
-    }, []);
-
     const updatePrayerTheme = async () => {
         try {
             const savedLocation = await storage.getString(KEYS.LOCATION);
@@ -80,6 +67,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
             console.log('Error updating prayer theme:', e);
         }
     };
+
+    // 1. Load Preference
+    useEffect(() => {
+        const loadTheme = async () => {
+            const savedTheme = await storage.getString(KEYS.THEME);
+            if (savedTheme) {
+                setThemeModeState(savedTheme as ThemeType);
+            }
+            // Trigger initial prayer theme calculation
+            updatePrayerTheme();
+        };
+        loadTheme();
+    }, []);
 
     // Update gradient every minute to stay accurate
     useEffect(() => {

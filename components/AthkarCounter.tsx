@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Dimensions } from 'react-native';
 import { useState, useEffect } from 'react';
 import * as Haptics from 'expo-haptics';
 import Animated, {
@@ -24,7 +24,7 @@ export function AthkarCounter({ targetCount }: AthkarCounterProps) {
     const isComplete = count >= targetCount;
 
     useEffect(() => {
-        progress.value = withTiming(count / targetCount, { duration: 300 });
+        progress.set(withTiming(count / targetCount, { duration: 300 }));
     }, [count, targetCount]);
 
     const handlePress = () => {
@@ -33,10 +33,10 @@ export function AthkarCounter({ targetCount }: AthkarCounterProps) {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
             // Pulse Animation
-            scale.value = withSequence(
+            scale.set(withSequence(
                 withSpring(0.9),
                 withSpring(1)
-            );
+            ));
 
             if (count + 1 === targetCount) {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -50,12 +50,12 @@ export function AthkarCounter({ targetCount }: AthkarCounterProps) {
     const handleReset = () => {
         setCount(0);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        progress.value = withTiming(0);
+        progress.set(withTiming(0));
     };
 
     const animatedButtonStyle = useAnimatedStyle(() => {
         return {
-            transform: [{ scale: scale.value }],
+            transform: [{ scale: scale.get() }],
         };
     });
 
@@ -63,9 +63,11 @@ export function AthkarCounter({ targetCount }: AthkarCounterProps) {
         <View style={styles.container}>
             {/* Main Circular Button */}
             <Animated.View style={[animatedButtonStyle]}>
-                <TouchableOpacity
-                    activeOpacity={0.9}
+                <Pressable
                     onPress={handlePress}
+                    style={({ pressed }) => [
+                        { opacity: pressed ? 0.9 : 1 }
+                    ]}
                 >
                     <LinearGradient
                         colors={isComplete ? ['#10B981', '#059669'] : ['#F59E0B', '#D97706']}
@@ -85,15 +87,21 @@ export function AthkarCounter({ targetCount }: AthkarCounterProps) {
                             </View>
                         )}
                     </LinearGradient>
-                </TouchableOpacity>
+                </Pressable>
             </Animated.View>
 
             {/* Reset / Controls */}
             <View style={styles.controls}>
-                <TouchableOpacity onPress={handleReset} style={styles.resetButton}>
+                <Pressable 
+                    onPress={handleReset} 
+                    style={({ pressed }) => [
+                        styles.resetButton,
+                        { opacity: pressed ? 0.7 : 1 }
+                    ]}
+                >
                     <Ionicons name="refresh" size={20} color="#666" />
                     <Text style={styles.resetText}>إعادة</Text>
-                </TouchableOpacity>
+                </Pressable>
             </View>
         </View>
     );

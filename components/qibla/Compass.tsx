@@ -49,18 +49,13 @@ const KaabaSvg = ({ isAligned }: { isAligned: boolean }) => (
 
 export const Compass = ({ qiblaBearing, onAlignChange }: CompassProps) => {
     const theme = useTheme();
-    const [subscription, setSubscription] = useState<Location.LocationSubscription | null>(null);
+    const subscriptionRef = useRef<Location.LocationSubscription | null>(null);
     const [heading, setHeading] = useState(0);
     const [isAligned, setIsAligned] = useState(false);
 
     const rotateValue = useSharedValue(0);
     const kaabaRotateValue = useSharedValue(0);
     const hasVibratedRef = useRef(false);
-
-    useEffect(() => {
-        _subscribe();
-        return () => _unsubscribe();
-    }, []);
 
     const _subscribe = async () => {
         const { status } = await Location.getForegroundPermissionsAsync();
@@ -70,40 +65,45 @@ export const Compass = ({ qiblaBearing, onAlignChange }: CompassProps) => {
             const h = data.trueHeading >= 0 ? data.trueHeading : data.magHeading;
             setHeading(h);
         });
-        setSubscription(sub);
+        subscriptionRef.current = sub;
     };
 
     const _unsubscribe = () => {
-        if (subscription) {
-            subscription.remove();
-            setSubscription(null);
+        if (subscriptionRef.current) {
+            subscriptionRef.current.remove();
+            subscriptionRef.current = null;
         }
     };
 
     useEffect(() => {
-        const currentRotation = rotateValue.value;
+        _subscribe();
+        return () => _unsubscribe();
+    }, []);
+
+    useEffect(() => {
+        const currentRotation = rotateValue.get();
         const targetRotation = -heading;
 
         let diff = targetRotation - currentRotation;
         while (diff > 180) diff -= 360;
         while (diff < -180) diff += 360;
 
-        rotateValue.value = withSpring(currentRotation + diff, {
+        rotateValue.set(withSpring(currentRotation + diff, {
             damping: 80,
             stiffness: 60,
             mass: 2,
-        });
+        }));
 
         const kaabaAngle = qiblaBearing - heading;
-        let kaabaDiff = kaabaAngle - kaabaRotateValue.value;
+        let kaabaDiff = kaabaAngle - kaabaRotateValue.get();
         while (kaabaDiff > 180) kaabaDiff -= 360;
         while (kaabaDiff < -180) kaabaDiff += 360;
 
-        kaabaRotateValue.value = withSpring(kaabaRotateValue.value + kaabaDiff, {
+        kaabaRotateValue.set(withSpring(kaabaRotateValue.get() + kaabaDiff, {
             damping: 80,
             stiffness: 60,
             mass: 2,
-        });
+        }));
     }, [heading, qiblaBearing]);
 
     useEffect(() => {
@@ -126,11 +126,11 @@ export const Compass = ({ qiblaBearing, onAlignChange }: CompassProps) => {
     }, [heading, qiblaBearing]);
 
     const compassAnimatedStyle = useAnimatedStyle(() => ({
-        transform: [{ rotate: `${rotateValue.value}deg` }],
+        transform: [{ rotate: `${rotateValue.get()}deg` }],
     }));
 
     const kaabaAnimatedStyle = useAnimatedStyle(() => ({
-        transform: [{ rotate: `${kaabaRotateValue.value}deg` }],
+        transform: [{ rotate: `${kaabaRotateValue.get()}deg` }],
     }));
 
     const compassBg = theme.cardBackground;

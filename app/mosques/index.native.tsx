@@ -25,21 +25,6 @@ export default function MosquesMap() {
     const [mosques, setMosques] = useState<Mosque[]>([]);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        (async () => {
-            let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                setErrorMsg('Permission to access location was denied');
-                setLoading(false);
-                return;
-            }
-
-            const currentLocation = await Location.getCurrentPositionAsync({});
-            setLocation(currentLocation);
-            fetchMosques(currentLocation.coords.latitude, currentLocation.coords.longitude);
-        })();
-    }, []);
-
     async function fetchMosques(lat: number, lon: number) {
         try {
             // Overpass API Query: Find nodes with amenity=place_of_worship AND religion=muslim within 5000m (5km)
@@ -77,7 +62,22 @@ export default function MosquesMap() {
         } finally {
             setLoading(false);
         }
-    };
+    }
+
+    useEffect(() => {
+        (async () => {
+            let { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                setErrorMsg('Permission to access location was denied');
+                setLoading(false);
+                return;
+            }
+
+            const currentLocation = await Location.getCurrentPositionAsync({});
+            setLocation(currentLocation);
+            fetchMosques(currentLocation.coords.latitude, currentLocation.coords.longitude);
+        })();
+    }, []);
 
     return (
         <View style={styles.container}>

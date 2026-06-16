@@ -28,10 +28,6 @@ export function IslamicEvents({ delay = 500 }: IslamicEventsProps) {
     const [events, setEvents] = useState<UpcomingEvent[]>([]);
     const [todayReminders, setTodayReminders] = useState<string[]>([]);
 
-    useEffect(() => {
-        calculateEvents();
-    }, []);
-
     const calculateEvents = () => {
         const m = moment();
         const hijriMonth = parseInt(m.format('iM'));
@@ -120,6 +116,10 @@ export function IslamicEvents({ delay = 500 }: IslamicEventsProps) {
         setEvents(upcoming.slice(0, 3)); // Show top 3
         setTodayReminders(reminders);
     };
+
+    useEffect(() => {
+        calculateEvents();
+    }, []);
 
     const getIconName = (iconName: string): keyof typeof Ionicons.glyphMap => {
         const iconMap: Record<string, keyof typeof Ionicons.glyphMap> = {

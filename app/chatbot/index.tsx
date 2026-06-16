@@ -123,10 +123,36 @@ export default function ChatbotScreen() {
         display: sidebarOffset.value === SIDEBAR_WIDTH ? 'none' : 'flex'
     }));
 
-    // Load all threads on mount
-    useEffect(() => {
-        loadThreads();
-    }, []);
+    const currentThread = useMemo(() =>
+        threads.find(t => t.id === currentThreadId),
+        [threads, currentThreadId]);
+
+    const createNewThread = () => {
+        // If current thread is empty (only has welcome message), just close sidebar
+        if (currentThread && currentThread.messages.length <= 1) {
+            setIsSidebarOpen(false);
+            return;
+        }
+
+        const newThread: ChatThread = {
+            id: Date.now().toString(),
+            title: 'محادثة جديدة',
+            messages: [{
+                id: (Date.now() + 1).toString(),
+                text: getWelcomeMessage(),
+                sender: 'ai',
+                timestamp: new Date()
+            }],
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
+        // Don't save to storage yet, only set in state
+        const updatedThreads = [newThread, ...threads];
+        setThreads(updatedThreads);
+        setCurrentThreadId(newThread.id);
+        // saveThreads(updatedThreads); // Removed: Only save when user sends a message
+        setIsSidebarOpen(false);
+    };
 
     const loadThreads = async () => {
         try {
@@ -160,6 +186,11 @@ export default function ChatbotScreen() {
         }
     };
 
+    // Load all threads on mount
+    useEffect(() => {
+        loadThreads();
+    }, []);
+
     const saveThreads = async (updatedThreads: ChatThread[]) => {
         try {
             await AsyncStorage.setItem(THREADS_STORAGE_KEY, JSON.stringify(updatedThreads));
@@ -167,37 +198,6 @@ export default function ChatbotScreen() {
             console.error('Error saving threads:', error);
         }
     };
-
-    const createNewThread = () => {
-        // If current thread is empty (only has welcome message), just close sidebar
-        if (currentThread && currentThread.messages.length <= 1) {
-            setIsSidebarOpen(false);
-            return;
-        }
-
-        const newThread: ChatThread = {
-            id: Date.now().toString(),
-            title: 'محادثة جديدة',
-            messages: [{
-                id: (Date.now() + 1).toString(),
-                text: getWelcomeMessage(),
-                sender: 'ai',
-                timestamp: new Date()
-            }],
-            createdAt: new Date(),
-            updatedAt: new Date()
-        };
-        // Don't save to storage yet, only set in state
-        const updatedThreads = [newThread, ...threads];
-        setThreads(updatedThreads);
-        setCurrentThreadId(newThread.id);
-        // saveThreads(updatedThreads); // Removed: Only save when user sends a message
-        setIsSidebarOpen(false);
-    };
-
-    const currentThread = useMemo(() =>
-        threads.find(t => t.id === currentThreadId),
-        [threads, currentThreadId]);
 
     const handleSend = async () => {
         if (!inputText.trim() || isLoading || !currentThreadId) return;

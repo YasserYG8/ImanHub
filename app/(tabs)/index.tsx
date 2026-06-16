@@ -47,20 +47,6 @@ export default function HomeScreen() {
   const year = today.getFullYear();
   const gregorianDate = `${day} ${month} ${year}`;
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [])
-  );
-
-  const loadData = async () => {
-    const lastReadData = await getItem(KEYS.LAST_READ);
-    if (lastReadData && typeof lastReadData === 'object' && 'surahId' in lastReadData && 'page' in lastReadData) {
-      setLastRead(lastReadData as { surahId: number; page: number });
-    }
-    fetchLocation();
-  };
-
   const fetchLocation = async () => {
     try {
       const { status } = await Location.getForegroundPermissionsAsync();
@@ -121,6 +107,20 @@ export default function HomeScreen() {
       console.log('Error fetching location:', e);
     }
   };
+
+  const loadData = async () => {
+    const lastReadData = await getItem(KEYS.LAST_READ);
+    if (lastReadData && typeof lastReadData === 'object' && 'surahId' in lastReadData && 'page' in lastReadData) {
+      setLastRead(lastReadData as { surahId: number; page: number });
+    }
+    fetchLocation();
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   // Scroll handler for parallax
   const scrollHandler = useAnimatedScrollHandler({
