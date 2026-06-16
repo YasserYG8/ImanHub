@@ -22,18 +22,18 @@ export function ScalePressable({
 
     const animatedStyle = useAnimatedStyle(() => {
         return {
-            transform: [{ scale: scale.value }],
+            transform: [{ scale: scale.get() }],
         };
     });
 
     const handlePressIn = (event: any) => {
-        scale.value = withSpring(scaleTo, { damping: 10, stiffness: 300 });
+        scale.set(withSpring(scaleTo, { damping: 10, stiffness: 300 }));
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onPressIn?.(event);
     };
 
     const handlePressOut = (event: any) => {
-        scale.value = withSpring(1, { damping: 10, stiffness: 300 });
+        scale.set(withSpring(1, { damping: 10, stiffness: 300 }));
         onPressOut?.(event);
     };
 

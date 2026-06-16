@@ -57,6 +57,7 @@ export default function QuranScreen() {
     const [isPageSearchVisible, setIsPageSearchVisible] = useState(false);
     const [pageSearchInput, setPageSearchInput] = useState('');
     const [useArabicNumbers, setUseArabicNumbers] = useState(true);
+    const [fontScale, setFontScale] = useState(1.0);
 
     useFocusEffect(
         useCallback(() => {
@@ -73,6 +74,7 @@ export default function QuranScreen() {
                 const settingsData = await getItem<any>('quran_settings');
                 if (settingsData) {
                     setUseArabicNumbers(settingsData.useArabicNumbers ?? true);
+                    setFontScale(settingsData.fontScale ?? 1.0);
                 }
             };
             loadData();
@@ -81,7 +83,14 @@ export default function QuranScreen() {
 
     const handleToggleNumbers = async (val: boolean) => {
         setUseArabicNumbers(val);
-        await saveItem('quran_settings', { useArabicNumbers: val });
+        const settings = (await getItem<any>('quran_settings')) || {};
+        await saveItem('quran_settings', { ...settings, useArabicNumbers: val });
+    };
+
+    const handleFontScaleChange = async (newScale: number) => {
+        setFontScale(newScale);
+        const settings = (await getItem<any>('quran_settings')) || {};
+        await saveItem('quran_settings', { ...settings, fontScale: newScale });
     };
 
     const handleDeleteBookmark = async (pageToDelete: number) => {
@@ -461,6 +470,8 @@ export default function QuranScreen() {
                 onClose={() => setSettingsVisible(false)}
                 useArabicNumbers={useArabicNumbers}
                 onToggleNumbers={handleToggleNumbers}
+                fontScale={fontScale}
+                onFontScaleChange={handleFontScaleChange}
                 theme={theme}
             />
 

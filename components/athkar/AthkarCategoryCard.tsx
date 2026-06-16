@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -30,15 +30,15 @@ export const AthkarCategoryCard = ({ item, index, onPress, theme }: AthkarCatego
     const themeConfig = ATHKAR_THEMES[item.id] || ATHKAR_THEMES.default;
 
     const animatedStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: scale.value }]
+        transform: [{ scale: scale.get() }]
     }));
 
     const handlePressIn = () => {
-        scale.value = withSpring(0.96);
+        scale.set(withSpring(0.96));
     };
 
     const handlePressOut = () => {
-        scale.value = withSpring(1);
+        scale.set(withSpring(1));
     };
 
     return (
@@ -46,12 +46,14 @@ export const AthkarCategoryCard = ({ item, index, onPress, theme }: AthkarCatego
             entering={FadeInDown.delay(index * 100).springify().damping(12)}
             style={[styles.container, animatedStyle]}
         >
-            <TouchableOpacity
-                activeOpacity={0.9}
+            <Pressable
                 onPress={onPress}
                 onPressIn={handlePressIn}
                 onPressOut={handlePressOut}
-                style={styles.touchable}
+                style={({ pressed }) => [
+                    styles.touchable,
+                    { opacity: pressed ? 0.9 : 1 }
+                ]}
             >
                 <View style={[styles.card, { backgroundColor: theme.cardBackground, shadowColor: themeConfig.colors[0] }]}>
 
@@ -105,7 +107,7 @@ export const AthkarCategoryCard = ({ item, index, onPress, theme }: AthkarCatego
                     {/* Decorative Circle (Background) */}
                     <View style={[styles.decorativeCircle, { borderColor: themeConfig.colors[0], opacity: 0.1 }]} />
                 </View>
-            </TouchableOpacity>
+            </Pressable>
         </Animated.View>
     );
 };

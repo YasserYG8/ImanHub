@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, ActivityIndicator, TouchableOpacity, Platform, Alert, Dimensions } from 'react-native';
+import { View, StyleSheet, Text, ActivityIndicator, Pressable, Platform, Alert, Dimensions } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
@@ -34,13 +34,13 @@ export default function MosquesMap() {
                 return;
             }
 
-            let location = await Location.getCurrentPositionAsync({});
-            setLocation(location);
-            fetchMosques(location.coords.latitude, location.coords.longitude);
+            const currentLocation = await Location.getCurrentPositionAsync({});
+            setLocation(currentLocation);
+            fetchMosques(currentLocation.coords.latitude, currentLocation.coords.longitude);
         })();
     }, []);
 
-    const fetchMosques = async (lat: number, lon: number) => {
+    async function fetchMosques(lat: number, lon: number) {
         try {
             // Overpass API Query: Find nodes with amenity=place_of_worship AND religion=muslim within 5000m (5km)
             const query = `
@@ -82,12 +82,15 @@ export default function MosquesMap() {
     return (
         <View style={styles.container}>
             {/* Header / Back Button */}
-            <TouchableOpacity
-                style={[styles.backButton, { backgroundColor: theme.cardBackground }]}
+            <Pressable
+                style={({ pressed }) => [
+                    styles.backButton,
+                    { backgroundColor: theme.cardBackground, opacity: pressed ? 0.7 : 1 }
+                ]}
                 onPress={() => router.back()}
             >
                 <Ionicons name="arrow-forward" size={24} color={theme.text} />
-            </TouchableOpacity>
+            </Pressable>
 
             {!location ? (
                 <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>

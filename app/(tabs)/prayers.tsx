@@ -1,5 +1,4 @@
-
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity, ImageBackground, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView, ImageBackground, Dimensions, Platform, Image } from 'react-native';
 import { useEffect, useState } from 'react';
 import * as Location from 'expo-location';
 import { getPrayerTimes, getNextPrayer } from '../../utils/prayerTimes';
@@ -14,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Configure moment
 moment.locale('ar');
@@ -23,11 +23,23 @@ moment.updateLocale('ar', {
 
 const { width } = Dimensions.get('window');
 
+// Defined colors for prayers based on reference image
+const PRAYER_COLORS = {
+    [Prayer.Fajr]: '#3B82F6',     // Blue
+    [Prayer.Sunrise]: '#F97316',  // Orange
+    [Prayer.Dhuhr]: '#EAB308',    // Yellowish
+    [Prayer.Asr]: '#F59E0B',      // Gold/Orange
+    [Prayer.Maghrib]: '#8B5CF6',  // Purple
+    [Prayer.Isha]: '#4F46E5',     // Indigo
+    [Prayer.None]: '#10B981'      // Default Green
+};
+
 export default function PrayerTimesScreen() {
     const theme = useTheme();
     const { isDark } = useThemeContext();
     const router = useRouter();
     const [location, setLocation] = useState<Location.LocationObject | null>(null);
+    const [locationName, setLocationName] = useState<string>('جاري تحديد الموقع...');
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [currentTime, setCurrentTime] = useState(new Date());
     const [prayerTimes, setPrayerTimes] = useState<any>(null);
@@ -64,23 +76,131 @@ export default function PrayerTimesScreen() {
 
     useEffect(() => {
         (async () => {
+            // 1. Try to load from cache immediately
+            try {
+                const cachedLocationStr = await AsyncStorage.getItem('cachedLocation');
+                const cachedLocationName = await AsyncStorage.getItem('cachedLocationName');
+
+                if (cachedLocationStr) {
+                    const cachedLocation = JSON.parse(cachedLocationStr);
+                    setLocation(cachedLocation);
+
+                    if (cachedLocationName) {
+                        setLocationName(cachedLocationName);
+                    }
+
+                    // Calculate times for TODAY based on cached location
+                    // This allows offline usage even if the day has changed
+                    const times = getPrayerTimes({
+                        latitude: cachedLocation.coords.latitude,
+                        longitude: cachedLocation.coords.longitude
+                    });
+                    setPrayerTimes(times);
+                }
+            } catch (e) {
+                console.log('Error loading cached location:', e);
+            }
+
+            // 2. Request permissions and fetch fresh location
             let { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
                 setErrorMsg('الرجاء السماح بالوصول إلى الموقع');
+                setLocationName('الموقع غير متاح');
                 return;
             }
 
-            let location = await Location.getCurrentPositionAsync({});
-            setLocation(location);
+            try {
+                let location = await Location.getCurrentPositionAsync({});
+                setLocation(location);
+                // Save to cache for offline use
+                await AsyncStorage.setItem('cachedLocation', JSON.stringify(location));
 
-            const times = getPrayerTimes({
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude
-            });
-            setPrayerTimes(times);
+                // Reverse Geocoding with Arabic Preference (OSM Nominatim)
+                try {
+                    // 1. Try OSM Nominatim API for forced Arabic
+                    // Using fetch is safe as it's a standard web API available in React Native
+                    const response = await fetch(
+                        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${location.coords.latitude}&lon=${location.coords.longitude}&accept-language=ar`,
+                        {
+                            headers: {
+                                'User-Agent': 'AthkarApp/1.0'
+                            }
+                        }
+                    );
 
-            // Schedule prayer notifications
-            await schedulePrayerNotifications(times);
+                    const data = await response.json();
+
+                    if (data && data.address) {
+                        const addr = data.address;
+                        // Prioritize: City -> Town -> Village -> County -> State
+                        const city = addr.city || addr.town || addr.village || addr.county || addr.state;
+                        const country = addr.country;
+
+                        const parts = [];
+                        if (city) parts.push(city);
+                        if (country) parts.push(country);
+
+                        const name = parts.join('، ') || 'الموقع الحالي';
+                        setLocationName(name);
+                        // Save location name to cache
+                        await AsyncStorage.setItem('cachedLocationName', name);
+                    } else {
+                        throw new Error('No address from OSM');
+                    }
+
+                } catch (osmError) {
+                    // 2. Fallback to Native Geocoder if OSM fails
+                    console.log('OSM Geocode failed, falling back to native:', osmError);
+                    try {
+                        const address = await Location.reverseGeocodeAsync({
+                            latitude: location.coords.latitude,
+                            longitude: location.coords.longitude
+                        });
+
+                        if (address && address.length > 0) {
+                            const place = address[0];
+
+                            // Try to translate country to Arabic via Intl
+                            let countryArabic = place.country;
+                            if (place.isoCountryCode) {
+                                try {
+                                    const regionNames = new Intl.DisplayNames(['ar'], { type: 'region' });
+                                    countryArabic = regionNames.of(place.isoCountryCode) || place.country;
+                                } catch (e) { }
+                            }
+
+                            const parts = [];
+                            if (place.city && place.city !== place.country) parts.push(place.city);
+                            if (countryArabic) parts.push(countryArabic);
+
+                            const name = parts.join('، ') || 'الموقع الحالي';
+                            setLocationName(name);
+                            // Save location name to cache
+                            await AsyncStorage.setItem('cachedLocationName', name);
+                        } else {
+                            setLocationName('الموقع الحالي');
+                        }
+                    } catch (nativeError) {
+                        console.log(nativeError);
+                        setLocationName('الموقع الحالي');
+                    }
+                }
+
+                const times = getPrayerTimes({
+                    latitude: location.coords.latitude,
+                    longitude: location.coords.longitude
+                });
+                setPrayerTimes(times);
+
+                // Schedule prayer notifications
+                await schedulePrayerNotifications(times);
+
+            } catch (locationError) {
+                console.log('Error getting fresh location:', locationError);
+                // If we failed to get fresh location but have cached data, we are fine.
+                // If no cached data, maybe set error message?
+                // For now, we just rely on cached data if available.
+            }
         })();
     }, []);
 
@@ -107,21 +227,92 @@ export default function PrayerTimesScreen() {
     const nextPrayer = nextPrayerInfo?.prayer || Prayer.None;
 
     const prayers = prayerTimes ? [
-        { name: 'الفجر', key: Prayer.Fajr, time: formatTime(prayerTimes.fajr), rawTime: prayerTimes.fajr },
-        { name: 'الشروق', key: Prayer.Sunrise, time: formatTime(prayerTimes.sunrise), rawTime: prayerTimes.sunrise },
-        { name: 'الظهر', key: Prayer.Dhuhr, time: formatTime(prayerTimes.dhuhr), rawTime: prayerTimes.dhuhr },
-        { name: 'العصر', key: Prayer.Asr, time: formatTime(prayerTimes.asr), rawTime: prayerTimes.asr },
-        { name: 'المغرب', key: Prayer.Maghrib, time: formatTime(prayerTimes.maghrib), rawTime: prayerTimes.maghrib },
-        { name: 'العشاء', key: Prayer.Isha, time: formatTime(prayerTimes.isha), rawTime: prayerTimes.isha },
+        { name: 'الفجر', key: Prayer.Fajr, time: formatTime(prayerTimes.fajr), rawTime: prayerTimes.fajr, color: PRAYER_COLORS[Prayer.Fajr] },
+        { name: 'الشروق', key: Prayer.Sunrise, time: formatTime(prayerTimes.sunrise), rawTime: prayerTimes.sunrise, color: PRAYER_COLORS[Prayer.Sunrise] },
+        { name: 'الظهر', key: Prayer.Dhuhr, time: formatTime(prayerTimes.dhuhr), rawTime: prayerTimes.dhuhr, color: PRAYER_COLORS[Prayer.Dhuhr] },
+        { name: 'العصر', key: Prayer.Asr, time: formatTime(prayerTimes.asr), rawTime: prayerTimes.asr, color: PRAYER_COLORS[Prayer.Asr] },
+        { name: 'المغرب', key: Prayer.Maghrib, time: formatTime(prayerTimes.maghrib), rawTime: prayerTimes.maghrib, color: PRAYER_COLORS[Prayer.Maghrib] },
+        { name: 'العشاء', key: Prayer.Isha, time: formatTime(prayerTimes.isha), rawTime: prayerTimes.isha, color: PRAYER_COLORS[Prayer.Isha] },
     ] : [];
 
-    // Add extra prayers if needed (Middle/Qiyam) logic kept simple for now or added as extra info
+    // --- Logic for Previous/Current Prayer and Progress ---
+    const getPreviousPrayerKey = (nextKey: string): string => {
+        switch (nextKey) {
+            case Prayer.Fajr: return Prayer.Isha;
+            case Prayer.Sunrise: return Prayer.Fajr;
+            case Prayer.Dhuhr: return Prayer.Sunrise;
+            case Prayer.Asr: return Prayer.Dhuhr;
+            case Prayer.Maghrib: return Prayer.Asr;
+            case Prayer.Isha: return Prayer.Maghrib;
+            default: return Prayer.Fajr;
+        }
+    };
+
+    const currentPrayerKey = getPreviousPrayerKey(nextPrayer);
+
+    // Find current prayer name
+    const currentPrayerObj = prayers.find(p => p.key === currentPrayerKey);
+    const currentPrayerName = currentPrayerObj ? currentPrayerObj.name : (nextPrayer === Prayer.Fajr ? 'العشاء' : '--');
+
+    // Refresh prayer times if date changes
+    useEffect(() => {
+        if (prayerTimes && location && location.coords) {
+            const now = new Date();
+            const pDate = prayerTimes.date;
+            if (pDate.getDate() !== now.getDate() || pDate.getMonth() !== now.getMonth() || pDate.getFullYear() !== now.getFullYear()) {
+                const times = getPrayerTimes({
+                    latitude: location.coords.latitude,
+                    longitude: location.coords.longitude
+                }, now);
+                setPrayerTimes(times);
+            }
+        }
+    }, [currentTime, location, prayerTimes]);
+
+    // Calculate Progress
+    let progress = 0;
+    if (nextPrayerInfo && nextPrayerInfo.time) {
+        let startTime: Date;
+
+        if (currentPrayerKey === Prayer.Isha && nextPrayer === Prayer.Fajr) {
+            // Special case: Isha -> Fajr (could be overnight)
+            if (prayerTimes && location && location.coords) {
+                // If current time is earlier than today's Fajr, we are in the "Early Morning"
+                // So the cycle started at Yesterday's Isha
+                if (currentTime < prayerTimes.fajr) {
+                    const yesterday = new Date(currentTime);
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    // We need yesterday's Isha time
+                    const prevTimes = getPrayerTimes({
+                        latitude: location.coords.latitude,
+                        longitude: location.coords.longitude
+                    }, yesterday);
+                    startTime = prevTimes.isha;
+                } else {
+                    // We are after today's Isha, waiting for tomorrow's Fajr
+                    startTime = prayerTimes.isha;
+                }
+            } else {
+                // Fallback
+                startTime = prayerTimes ? prayerTimes.isha : new Date();
+            }
+        } else {
+            const prevObj = prayers.find(p => p.key === currentPrayerKey);
+            startTime = prevObj ? prevObj.rawTime : new Date();
+        }
+
+        const endTime = nextPrayerInfo.time;
+        const totalDuration = endTime.getTime() - startTime.getTime();
+        const elapsed = currentTime.getTime() - startTime.getTime();
+
+        if (totalDuration > 0) {
+            progress = Math.min(Math.max(elapsed / totalDuration, 0), 1);
+        }
+    }
 
     // Calculate countdown
     let countdownStr = '';
     let targetTime = nextPrayerInfo?.time;
-
-    // Check if after Isha for special handling (optional, kept basic here to match existing logic flow)
 
     if (targetTime) {
         const diff = targetTime.getTime() - currentTime.getTime();
@@ -131,9 +322,22 @@ export default function PrayerTimesScreen() {
             const s = Math.floor((diff % (1000 * 60)) / 1000).toString().padStart(2, '0');
             countdownStr = `${h}:${m}:${s}`;
         } else {
-            countdownStr = 'الآن';
+            countdownStr = '00:00:00';
         }
     }
+
+    // Helper to determine background image
+    const getBackgroundImage = () => {
+        switch (nextPrayer) {
+            case Prayer.Sunrise: return require('../../assets/images/salat_fajer_time.png');
+            case Prayer.Dhuhr: return require('../../assets/images/salat_dhoher_time.png');
+            case Prayer.Asr: return require('../../assets/images/salat_dhoher_time.png');
+            case Prayer.Maghrib: return require('../../assets/images/salat_aser_time.png');
+            case Prayer.Isha: return require('../../assets/images/salat_meghreb_time.png');
+            case Prayer.Fajr: return require('../../assets/images/salat_icha_time.png');
+            default: return isDark ? require('../../assets/images/islam.jpg') : require('../../assets/images/islam_light.png');
+        }
+    };
 
     if (errorMsg) {
         return (
@@ -156,211 +360,208 @@ export default function PrayerTimesScreen() {
         );
     }
 
-
-    // Helper to determine background image
-    const getBackgroundImage = () => {
-        // Logic: Check NEXT prayer to determine CURRENT interval.
-        // nextPrayer is the UPCOMING prayer. 
-        // So if nextPrayer is Fajr, we are in Isha time.
-        // If nextPrayer is Sunrise, we are in Fajr time.
-
-        switch (nextPrayer) {
-            case Prayer.Sunrise:
-                // currently Fajr - displaying Fajr image
-                return require('../../assets/images/salat_fajer_time.png');
-
-            case Prayer.Dhuhr:
-                // Currently Sunrise (Shurooq) - User didn't provide specific image.
-                // Using Dhuhr image as it reflects daytime/noon.
-                return require('../../assets/images/salat_dhoher_time.png');
-
-            case Prayer.Asr:
-                // Currently Dhuhr - displaying Dhuhr image
-                return require('../../assets/images/salat_dhoher_time.png');
-
-            case Prayer.Maghrib:
-                // Currently Asr - displaying Asr image
-                return require('../../assets/images/salat_aser_time.png');
-
-            case Prayer.Isha:
-                // Currently Maghrib - displaying Maghrib image
-                return require('../../assets/images/salat_meghreb_time.png');
-
-            case Prayer.Fajr:
-                // Currently Isha - displaying Isha image
-                return require('../../assets/images/salat_icha_time.png');
-
-            default:
-                // Fallback / None
-                return isDark ? require('../../assets/images/islam.jpg') : require('../../assets/images/islam_light.png');
-        }
-    };
-
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
-            {/* HERO SECTION WITH COUNTDOWN */}
-            <View style={styles.heroContainer}>
-                <ImageBackground
-                    source={getBackgroundImage()}
-                    style={styles.heroBg}
-                    resizeMode="cover"
-                >
-                    <LinearGradient
-                        colors={isDark ? ['rgba(0,0,0,0.7)', 'rgba(0,0,0,0.9)'] : ['rgba(5, 150, 105, 0.4)', 'rgba(16, 185, 129, 0.2)']}
-                        style={StyleSheet.absoluteFill}
-                    />
-                    <LinearGradient
-                        colors={['transparent', isDark ? theme.background : 'rgba(0,0,0,0.5)']}
-                        style={StyleSheet.absoluteFill}
-                        locations={[0.5, 1]}
-                    />
-                    {/* Pattern Overlay */}
-                    <View style={styles.patternOverlay}>
-                        <Ionicons name="apps" size={width} color="rgba(255,255,255,0.05)" style={{ opacity: 0.5 }} />
-                    </View>
-                </ImageBackground>
+            <ImageBackground
+                source={getBackgroundImage()}
+                style={styles.heroBg}
+                resizeMode="cover"
+            >
+                {/* Dark Overlay for readability */}
+                <LinearGradient
+                    colors={isDark
+                        ? ['rgba(0,0,0,0.6)', 'rgba(0,0,0,0.85)', theme.background]
+                        : ['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.6)', theme.background]}
+                    style={StyleSheet.absoluteFill}
+                    locations={[0, 0.5, 1]}
+                />
 
                 <ScrollView
-                    style={styles.heroContent}
+                    style={styles.scrollView}
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
                 >
-                    {/* Header Row */}
-                    <View style={styles.headerRow}>
-                        {/* Back button removed for Tabs */}
-                        {/* <Text style={[styles.headerTitle, { color: isDark ? theme.text : '#FFF' }]}>مواقيت الصلاة</Text> */}
-                        {/* <View style={{ width: 40 }} /> */}
+                    {/* Header: Date & Location */}
+                    <View style={styles.headerContainer}>
+                        <View style={styles.locationRow}>
+                            <Ionicons name="location-sharp" size={20} color={theme.primary} />
+                            <Text style={[styles.locationText, { color: '#FFF' }]}>{locationName}</Text>
+                        </View>
+                        <Text style={[styles.dateText, { color: '#FFF' }]}>{gregorianDate}</Text>
+                        <Text style={[styles.hijriText, { color: 'rgba(255,255,255,0.8)' }]}>{hijriDate}</Text>
                     </View>
 
-                    {/* Date Info - Moved to top */}
-                    <Animated.View entering={FadeInUp.delay(100).springify()} style={styles.dateContainer}>
-                        <Text style={[styles.hijriDateText, { color: isDark ? theme.primary : '#FFF' }]}>{hijriDate}</Text>
-                        <View style={[styles.dateSeparator, { backgroundColor: isDark ? theme.border : 'rgba(255,255,255,0.4)' }]} />
-                        <Text style={[styles.gregorianDateText, { color: isDark ? theme.textSecondary : 'rgba(255,255,255,0.85)' }]}>{gregorianDate}</Text>
-                    </Animated.View>
+                    {/* HERO CARD: Countdown & Progress */}
+                    {/* Increased size and padding */}
+                    <View style={[styles.heroCard, { borderColor: theme.primary }]}>
+                        <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
 
-                    {/* Compact Countdown */}
-                    <Animated.View entering={FadeInUp.delay(200).springify()} style={styles.countdownContainer}>
-                        <BlurView intensity={isDark ? 20 : 20} tint={isDark ? 'dark' : 'light'} style={[styles.countdownCompact, { borderColor: isDark ? theme.border : 'rgba(255,255,255,0.2)' }]}>
-                            <View style={styles.countdownRow}>
-                                <View style={styles.countdownInfo}>
-                                    <Text style={[styles.nextPrayerLabel, { color: isDark ? theme.textSecondary : 'rgba(255,255,255,0.9)' }]}>
-                                        {nextPrayerInfo?.name || 'الصلاة القادمة'}
-                                    </Text>
-                                    <Text style={[styles.nextPrayerTime, { color: isDark ? theme.text : 'rgba(255,255,255,0.9)' }]}>
-                                        {nextPrayerInfo?.time ? formatTime(nextPrayerInfo.time) : '--:--'}
-                                    </Text>
-                                </View>
-                                <Text style={[styles.countdownTimer, { color: isDark ? theme.text : '#FFF' }]}>{countdownStr}</Text>
+                        <View style={styles.heroInner}>
+                            {/* Top Badge */}
+                            <View style={[styles.nextBadge, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
+                                <Ionicons name="time-outline" size={16} color={theme.primary} style={{ marginRight: 6 }} />
+                                <Text style={[styles.nextBadgeText, { color: theme.primary }]}>الصلاة القادمة</Text>
                             </View>
-                        </BlurView>
-                    </Animated.View>
 
-                    {/* Prayer Times Grid */}
-                    <View style={styles.prayerGrid}>
-                        {prayers.map((prayer, index) => {
-                            const isNext = nextPrayer === prayer.key;
-                            const isPassed = prayer.rawTime < currentTime && !isNext;
+                            {/* Countdown - Much Bigger */}
+                            <Text style={[styles.countdownText, { color: '#FFF' }]}>{countdownStr}</Text>
 
-                            return (
-                                <Animated.View
-                                    key={index}
-                                    entering={FadeInDown.delay(400 + (index * 60)).springify()}
-                                    style={styles.prayerGridItem}
-                                >
-                                    <LinearGradient
-                                        // Dark Mode: Use specific dark color (Zn-800)
-                                        // Light Mode: Use white/transparency
-                                        colors={
-                                            isNext
-                                                ? (isDark ? [theme.primary, '#059669'] : ['#10B981', '#059669'])
-                                                : isDark
-                                                    ? [theme.cardBackground, theme.cardBackground]
-                                                    : ['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.95)']
-                                        }
-                                        style={[
-                                            styles.prayerCard,
-                                            {
-                                                borderColor: isNext ? 'transparent' : theme.border,
-                                                borderWidth: isDark && !isNext ? 1 : 0,
-                                                opacity: isPassed ? 0.7 : 1,
-                                            }
-                                        ]}
-                                        start={{ x: 0, y: 0 }}
-                                        end={{ x: 1, y: 1 }}
-                                    >
-                                        <View style={[
-                                            styles.iconBox,
-                                            { backgroundColor: isNext ? 'rgba(255,255,255,0.2)' : isDark ? 'rgba(255,255,255,0.05)' : 'rgba(16, 185, 129, 0.1)' }
-                                        ]}>
-                                            <Ionicons
-                                                name={
-                                                    prayer.key === Prayer.Fajr ? 'partly-sunny-outline' :
-                                                        prayer.key === Prayer.Sunrise ? 'sunny-outline' :
-                                                            prayer.key === Prayer.Dhuhr ? 'sunny' :
-                                                                prayer.key === Prayer.Asr ? 'cloud-outline' :
-                                                                    prayer.key === Prayer.Maghrib ? 'moon-outline' : 'moon'
-                                                }
-                                                size={22}
-                                                color={isNext ? '#FFF' : isDark ? theme.text : theme.primary}
-                                            />
-                                        </View>
+                            {/* Until Label */}
+                            <Text style={[styles.untilText, { color: 'rgba(255,255,255,0.7)' }]}>
+                                متبقي على <Text style={{ color: '#FFF', fontWeight: '800' }}>{nextPrayerInfo?.name}</Text>
+                            </Text>
 
-                                        <Text style={[
-                                            styles.prayerNameText,
-                                            { color: isNext ? '#FFF' : theme.text }
-                                        ]}>
-                                            {prayer.name}
-                                        </Text>
-
-                                        <Text style={[
-                                            styles.prayerTimeText,
-                                            { color: isNext ? '#FFF' : theme.text }
-                                        ]}>
-                                            {prayer.time}
-                                        </Text>
-
-                                        {/* Badge removed to keep consistent size with other cards */}
-                                    </LinearGradient>
-                                </Animated.View>
-                            );
-                        })}
-                    </View>
-
-
-                    {/* Sunnah Prayers Section - NO LOGO, BOLD TEXT */}
-                    <View style={styles.sunnahContainer}>
-                        <Text style={[styles.sectionTitle, { color: theme.text }]}>أوقات السنن</Text>
-                        <View style={styles.sunnahGrid}>
-                            <View style={[styles.sunnahCard, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
-                                <View>
-                                    <Text style={[styles.sunnahLabel, { color: theme.textSecondary }]}>منتصف الليل</Text>
-                                    <Text style={[styles.sunnahTime, { color: theme.text }]}>
-                                        {prayerTimes?.middle ? formatTime(prayerTimes.middle) : '--:--'}
-                                    </Text>
+                            {/* Progress Bar */}
+                            <View style={styles.progressContainer}>
+                                <View style={[styles.progressBarBg, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
+                                    <View style={[styles.progressBarFill, { width: `${progress * 100}%`, backgroundColor: theme.primary }]} />
                                 </View>
                             </View>
 
-                            <View style={[styles.sunnahCard, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
-                                <View>
-                                    <Text style={[styles.sunnahLabel, { color: theme.textSecondary }]}>قيام الليل</Text>
-                                    <Text style={[styles.sunnahTime, { color: theme.text }]}>
-                                        {prayerTimes?.qiyam ? formatTime(prayerTimes.qiyam) : '--:--'}
+                            {/* Footer: Current & Upcoming - Increased Text Size */}
+                            <View style={styles.heroFooter}>
+                                <View style={styles.footerItem}>
+                                    <Text style={styles.footerLabel}>الحالية</Text>
+                                    <Text style={[styles.footerValue, { color: '#FFF' }]}>{currentPrayerName}</Text>
+                                </View>
+                                <View style={[styles.footerItem, { alignItems: 'flex-start' }]}>
+                                    <Text style={styles.footerLabel}>القادمة</Text>
+                                    <Text style={[styles.footerValue, { color: theme.primary }]}>
+                                        {nextPrayerInfo?.name} {nextPrayerInfo?.time ? formatTime(nextPrayerInfo.time) : ''}
                                     </Text>
                                 </View>
                             </View>
                         </View>
                     </View>
 
-                    {/* Footer Note */}
-                    <View style={styles.footerNote}>
-                        <Ionicons name="location-outline" size={12} color={theme.textSecondary} />
-                        <Text style={[styles.footerText, { color: theme.textSecondary }]}>
-                            يتم حساب الأوقات بناءً على موقعك الحالي
-                        </Text>
+                    {/* TITLE: Today's Schedule */}
+                    <Text style={[styles.sectionTitle, { color: theme.text }]}>مواقيت اليوم</Text>
+
+                    {/* LIST: Daily Prayers - Increased Sizes */}
+                    <View style={styles.prayersList}>
+                        {prayers.map((prayer, index) => {
+                            const isNext = nextPrayer === prayer.key;
+                            return (
+                                <Animated.View
+                                    key={index}
+                                    entering={FadeInDown.delay(300 + (index * 50)).springify()}
+                                    style={[
+                                        styles.prayerRow,
+                                        {
+                                            backgroundColor: isNext ? 'rgba(16, 185, 129, 0.15)' : theme.cardBackground,
+                                            borderColor: isNext ? theme.primary : 'transparent',
+                                            borderWidth: isNext ? 1.5 : 0
+                                        }
+                                    ]}
+                                >
+                                    {/* Left: Icon & Name */}
+                                    <View style={styles.prayerInfoLeft}>
+                                        {/* Colored Dot/Circle for Icon */}
+                                        <View style={[
+                                            styles.iconCircle,
+                                            {
+                                                backgroundColor: (prayer.key === Prayer.Fajr || prayer.key === Prayer.Sunrise || prayer.key === Prayer.Dhuhr || prayer.key === Prayer.Asr || prayer.key === Prayer.Maghrib || prayer.key === Prayer.Isha)
+                                                    ? 'transparent'
+                                                    : (isNext ? theme.primary : 'rgba(255,255,255,0.05)'),
+                                                borderColor: (prayer.key === Prayer.Fajr || prayer.key === Prayer.Sunrise || prayer.key === Prayer.Dhuhr || prayer.key === Prayer.Asr || prayer.key === Prayer.Maghrib || prayer.key === Prayer.Isha) ? theme.primary : 'transparent',
+                                                borderWidth: (prayer.key === Prayer.Fajr || prayer.key === Prayer.Sunrise || prayer.key === Prayer.Dhuhr || prayer.key === Prayer.Asr || prayer.key === Prayer.Maghrib || prayer.key === Prayer.Isha) ? 2 : 0
+                                            }
+                                        ]}>
+                                            {/* We use a separate background layer for the specific color if not active, or just always use the specific color */}
+                                            {/* Design decision: Allow specific colors always, but active state gets global highight */}
+                                            {/* Re-reading user request: "colors of emoji of each salat like in the image" - so the circle should represent the prayer color always. */}
+                                            {(prayer.key !== Prayer.Fajr && prayer.key !== Prayer.Sunrise && prayer.key !== Prayer.Dhuhr && prayer.key !== Prayer.Asr && prayer.key !== Prayer.Maghrib && prayer.key !== Prayer.Isha) && (
+                                                <View style={[styles.iconCircleBg, { backgroundColor: prayer.color, opacity: 0.2 }]} />
+                                            )}
+
+                                            {prayer.key === Prayer.Fajr ? (
+                                                <Image
+                                                    source={require('../../assets/images/fajer_image.jpg')}
+                                                    style={{ width: '100%', height: '100%', borderRadius: 24, transform: [{ scale: 1.1 }] }}
+                                                    resizeMode="cover"
+                                                />
+                                            ) : prayer.key === Prayer.Sunrise ? (
+                                                <Image
+                                                    source={require('../../assets/images/chorouk_image.jpg')}
+                                                    style={{ width: '100%', height: '100%', borderRadius: 24, transform: [{ scale: 1.1 }] }}
+                                                    resizeMode="cover"
+                                                />
+                                            ) : prayer.key === Prayer.Dhuhr ? (
+                                                <Image
+                                                    source={require('../../assets/images/dhoher_image.jpg')}
+                                                    style={{ width: '100%', height: '100%', borderRadius: 24, transform: [{ scale: 1.1 }] }}
+                                                    resizeMode="cover"
+                                                />
+                                            ) : prayer.key === Prayer.Asr ? (
+                                                <Image
+                                                    source={require('../../assets/images/aser_image.png')}
+                                                    style={{ width: '100%', height: '100%', borderRadius: 24, transform: [{ scale: 1.1 }] }}
+                                                    resizeMode="cover"
+                                                />
+                                            ) : prayer.key === Prayer.Maghrib ? (
+                                                <Image
+                                                    source={require('../../assets/images/maghreb_image.jpg')}
+                                                    style={{ width: '100%', height: '100%', borderRadius: 24, transform: [{ scale: 1.1 }] }}
+                                                    resizeMode="cover"
+                                                />
+                                            ) : prayer.key === Prayer.Isha ? (
+                                                <Image
+                                                    source={require('../../assets/images/isha_image.jpg')}
+                                                    style={{ width: '100%', height: '100%', borderRadius: 24, transform: [{ scale: 1.1 }] }}
+                                                    resizeMode="cover"
+                                                />
+                                            ) : (
+                                                <Ionicons
+                                                    name={
+                                                        prayer.key === Prayer.Sunrise ? 'sunny' :
+                                                            prayer.key === Prayer.Dhuhr ? 'sunny' :
+                                                                prayer.key === Prayer.Asr ? 'cloud' :
+                                                                    prayer.key === Prayer.Maghrib ? 'moon' : 'moon'
+                                                    }
+                                                    size={22}
+                                                    color={prayer.color} // Icon itself matches the color theme
+                                                />
+                                            )}
+                                        </View>
+
+                                        <Text style={[styles.prayerRowName, { color: isNext ? theme.text : theme.textSecondary }]}>
+                                            {prayer.name}
+                                        </Text>
+                                    </View>
+
+                                    {/* Time */}
+                                    <Text style={[styles.prayerRowTime, { color: isNext ? theme.text : theme.text }]}>
+                                        {prayer.time}
+                                    </Text>
+                                </Animated.View>
+                            );
+                        })}
                     </View>
+
+                    {/* Sunnah Prayers Section */}
+                    <View style={styles.sunnahContainer}>
+                        <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 15 }]}>أوقات السنن</Text>
+                        <View style={styles.sunnahGrid}>
+                            <View style={[styles.sunnahCard, { backgroundColor: theme.cardBackground }]}>
+                                <Text style={[styles.sunnahLabel, { color: theme.textSecondary }]}>منتصف الليل</Text>
+                                <Text style={[styles.sunnahTime, { color: theme.text }]}>
+                                    {prayerTimes?.middle ? formatTime(prayerTimes.middle) : '--:--'}
+                                </Text>
+                            </View>
+
+                            <View style={[styles.sunnahCard, { backgroundColor: theme.cardBackground }]}>
+                                <Text style={[styles.sunnahLabel, { color: theme.textSecondary }]}>قيام الليل</Text>
+                                <Text style={[styles.sunnahTime, { color: theme.text }]}>
+                                    {prayerTimes?.qiyam ? formatTime(prayerTimes.qiyam) : '--:--'}
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* Spacing for Tabs */}
+                    <View style={{ height: 120 }} />
                 </ScrollView>
-            </View>
+            </ImageBackground>
         </View>
     );
 }
@@ -380,210 +581,187 @@ const styles = StyleSheet.create({
     loadingText: {
         marginTop: 10,
     },
-    heroContainer: {
-        flex: 1,
-        width: '100%',
-        overflow: 'hidden',
-    },
     heroBg: {
         flex: 1,
-        justifyContent: 'center',
+        width: '100%',
     },
-    patternOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        opacity: 0.1,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    heroContent: {
-        ...StyleSheet.absoluteFillObject,
+    scrollView: {
+        flex: 1,
     },
     scrollContent: {
-        paddingTop: 40,
-        paddingHorizontal: 20,
-        paddingBottom: 100, // Extra padding for tab bar
-        alignItems: 'center',
+        paddingTop: Platform.OS === 'ios' ? 70 : 50, // Increased top padding
+        paddingHorizontal: 24, // Increased horizontal padding
     },
-    headerRow: {
+    headerContainer: {
+        alignItems: 'center',
+        marginBottom: 24,
+    },
+    locationRow: {
         flexDirection: 'row-reverse',
-        width: '100%',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    backBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    headerTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-    },
-    countdownContainer: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 8,
-        width: '100%',
-    },
-    countdownCompact: {
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        borderRadius: 20,
-        overflow: 'hidden',
-        borderWidth: 1,
-        width: '90%',
-    },
-    countdownRow: {
-        flexDirection: 'row-reverse',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    countdownInfo: {
-        alignItems: 'flex-end',
-        gap: 2,
-    },
-    nextPrayerLabel: {
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    countdownTimer: {
-        fontSize: 28,
-        fontWeight: '800',
-        fontVariant: ['tabular-nums'],
-    },
-    nextPrayerTime: {
-        fontSize: 13,
-        fontWeight: '600',
-    },
-    dateContainer: {
-        marginTop: 12,
-        alignItems: 'center',
-        width: '100%',
-    },
-    dateSeparator: {
-        width: 40,
-        height: 1,
-        marginVertical: 4,
-    },
-    hijriDateText: {
-        fontSize: 24,           // Increased from 15
-        fontWeight: '700',
-        textAlign: 'center',
-    },
-    gregorianDateText: {
-        fontSize: 16,           // Increased from 12
-        fontWeight: '600',
-        textAlign: 'center',
-        opacity: 0.9,
-    },
-    prayerGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 10,
-        justifyContent: 'space-between',
-        marginTop: 16,
-        paddingHorizontal: 20,
-    },
-    prayerGridItem: {
-        width: '48%',
-        borderRadius: 18,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.08,
-        shadowRadius: 10,
-        elevation: 4,
-        backgroundColor: 'transparent',
-    },
-    prayerCard: {
-        padding: 14,
-        borderRadius: 18,
         alignItems: 'center',
         gap: 8,
-        minHeight: 115,
-        justifyContent: 'center',
+        marginBottom: 8,
     },
-    iconBox: {
-        width: 40,
-        height: 40,
-        borderRadius: 14,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    prayerNameText: {
-        fontSize: 15,
+    locationText: {
+        fontSize: 18, // Bigger
         fontWeight: '700',
-        textAlign: 'center',
     },
-    prayerTimeText: {
-        fontSize: 17,
-        fontWeight: '800',
-        textAlign: 'center',
+    dateText: {
+        fontSize: 24, // Bigger
+        fontWeight: '700',
+        marginBottom: 4,
+    },
+    hijriText: {
+        fontSize: 16, // Bigger
+        fontWeight: '500',
+    },
+    heroCard: {
+        width: '100%',
+        borderRadius: 30, // More rounded
+        overflow: 'hidden',
+        borderWidth: 2, // Thicker border
+        marginBottom: 36, // More spacing
+        minHeight: 260, // Taller card
+        backgroundColor: 'rgba(0,0,0,0.3)',
+    },
+    heroInner: {
+        padding: 28, // More padding
+        alignItems: 'center',
+        width: '100%',
     },
     nextBadge: {
-        backgroundColor: 'rgba(255,255,255,0.25)',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 8,
-        marginTop: 2,
-    },
-    nextBadgeText: {
-        color: '#FFF',
-        fontSize: 10,
-        fontWeight: '700',
-    },
-    footerNote: {
         flexDirection: 'row-reverse',
         alignItems: 'center',
-        justifyContent: 'center',
-        gap: 4,
-        marginTop: 16,
-        opacity: 0.8,
-        paddingHorizontal: 20,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 24,
+        marginBottom: 20,
     },
-    footerText: {
-        fontSize: 11,
+    nextBadgeText: {
+        fontSize: 14,
+        fontWeight: '700',
+        letterSpacing: 0.5,
+        paddingHorizontal: 4,
     },
-    sunnahContainer: {
-        marginTop: 24,
-        paddingHorizontal: 20,
+    countdownText: {
+        fontSize: 56, // MUCH Bigger
+        fontWeight: '800',
+        fontVariant: ['tabular-nums'],
+        marginBottom: 6,
+        letterSpacing: 2,
+    },
+    untilText: {
+        fontSize: 16,
+        fontWeight: '500',
+        marginBottom: 30,
+    },
+    progressContainer: {
+        width: '100%',
+        marginBottom: 30, // More spacing
+    },
+    progressBarBg: {
+        width: '100%',
+        height: 8, // Thicker bar
+        borderRadius: 4,
+        overflow: 'hidden',
+    },
+    progressBarFill: {
+        height: '100%',
+        borderRadius: 4,
+    },
+    heroFooter: {
+        flexDirection: 'row-reverse',
+        width: '100%',
+        justifyContent: 'space-between',
+        paddingTop: 20,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255,255,255,0.1)',
+    },
+    footerItem: {
+        alignItems: 'flex-end',
+    },
+    footerLabel: {
+        color: 'rgba(255,255,255,0.6)',
+        fontSize: 13, // Bigger
+        marginBottom: 6,
+        fontWeight: '500',
+    },
+    footerValue: {
+        fontSize: 16, // Bigger
+        fontWeight: '700',
     },
     sectionTitle: {
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: '700',
-        marginBottom: 12,
+        marginBottom: 16,
+        opacity: 0.8,
         textAlign: 'right',
+        width: '100%',
+        letterSpacing: 0.5,
+        paddingHorizontal: 4,
+    },
+    prayersList: {
+        width: '100%',
+        gap: 14, // More gap
+    },
+    prayerRow: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 20, // Bigger hit area
+        borderRadius: 24, // Match Card radius style
+        minHeight: 80, // Ensure substantial height
+    },
+    prayerInfoLeft: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: 16,
+    },
+    iconCircle: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
+        overflow: 'hidden',
+        position: 'relative',
+    },
+    iconCircleBg: {
+        ...StyleSheet.absoluteFillObject,
+    },
+    prayerRowName: {
+        fontSize: 18, // Bigger
+        fontWeight: '600',
+    },
+    prayerRowTime: {
+        fontSize: 18, // Bigger
+        fontWeight: '600',
+        fontVariant: ['tabular-nums'],
+    },
+    sunnahContainer: {
+        marginTop: 36,
+        width: '100%',
     },
     sunnahGrid: {
         flexDirection: 'row-reverse',
-        gap: 10,                    // Match prayerGrid gap
-        justifyContent: 'space-between', // Match prayerGrid spacing
+        gap: 14,
     },
     sunnahCard: {
-        width: '48%',               // Match prayerGridItem width
+        flex: 1,
+        padding: 20,
+        borderRadius: 24,
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 16,
-        borderRadius: 20,
-        borderWidth: 1,
-        minHeight: 100,
-    },
-    sunnahIconBox: {
-        display: 'none',
+        minHeight: 110,
     },
     sunnahLabel: {
         fontSize: 14,
-        fontWeight: '600',
-        textAlign: 'center',        // Center text
         marginBottom: 8,
         opacity: 0.8,
     },
     sunnahTime: {
-        fontSize: 22,               // Much bigger time
-        fontWeight: '800',
-        textAlign: 'center',        // Center text
+        fontSize: 22,
+        fontWeight: '700',
         fontVariant: ['tabular-nums'],
     },
 });

@@ -5,7 +5,8 @@ import { useThemeContext } from '@/context/ThemeContext';
 import { getSurahStartPage, getSurahFromPage } from '@/utils/quranPageMapping';
 import { getArabicSurahName } from '@/utils/arabicSurahNames';
 import { NavigationModal } from '@/components/quran/NavigationModal';
-import { getQuranPageImage } from '@/utils/quranImages';
+import { SettingsModal } from '@/components/quran/SettingsModal';
+
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 
 // ... (existing imports)
@@ -118,7 +119,7 @@ const AyahMenu = ({ visible, onClose, onAction, ayah, theme, isDark, useArabicNu
 
 // Duplicate SurahHeader removed
 
-const QuranTextPage = React.memo(({ pageNumber, theme, onAyahPress, bookmarks, ayahBookmarks, useArabicNumbers, highlightAyah }: any) => {
+const QuranTextPage = React.memo(({ pageNumber, theme, onAyahPress, bookmarks, ayahBookmarks, useArabicNumbers, highlightAyah, fontScale = 1.0 }: any) => {
     const [ayahs, setAyahs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -148,10 +149,11 @@ const QuranTextPage = React.memo(({ pageNumber, theme, onAyahPress, bookmarks, a
 
     // STRICT USER RULES:
     // Ayah body text: 26px, Line height: 48px
-    const fontSize = scale(26);
-    const lineHeight = scale(48);
+    // Apply fontScale for zoom in/out accessibility
+    const fontSize = scale(26) * fontScale;
+    const lineHeight = scale(48) * fontScale;
     const textAlign = 'center'; // "Center aligned" strict
-    const ayahMarkerSize = scale(24); // Approximation for "Diameter 24px" using font size
+    const ayahMarkerSize = scale(24) * fontScale; // Approximation for "Diameter 24px" using font size
 
     // Group ayahs into paragraphs separated by Surah headers
     const paragraphs = useMemo(() => {
@@ -380,6 +382,8 @@ export default function SurahScreen() {
     const [isMenuVisible, setIsMenuVisible] = useState(false);
     const [isNavModalVisible, setNavModalVisible] = useState(false);
     const [useArabicNumbers, setUseArabicNumbers] = useState(true);
+    const [fontScale, setFontScale] = useState(1.0);
+    const [isSettingsVisible, setSettingsVisible] = useState(false);
 
     // Toast ref
     const toastRef = useRef<ToastRef>(null);
@@ -403,6 +407,7 @@ export default function SurahScreen() {
                 console.log('[SurahScreen] Settings Loaded:', settings);
                 if (settings) {
                     setUseArabicNumbers(settings.useArabicNumbers ?? true);
+                    setFontScale(settings.fontScale ?? 1.0);
                 }
             };
             checkStatus();
@@ -445,6 +450,18 @@ export default function SurahScreen() {
         index,
     });
 
+    const handleFontScaleChange = async (newScale: number) => {
+        setFontScale(newScale);
+        const settings = (await getItem<any>('quran_settings')) || {};
+        await saveItem('quran_settings', { ...settings, fontScale: newScale });
+    };
+
+    const handleToggleNumbers = async (val: boolean) => {
+        setUseArabicNumbers(val);
+        const settings = (await getItem<any>('quran_settings')) || {};
+        await saveItem('quran_settings', { ...settings, useArabicNumbers: val });
+    };
+
     const renderItem = useCallback(({ item: pageNumber }: { item: number }) => {
         return (
             <View style={{ width, flex: 1 }}>
@@ -454,6 +471,7 @@ export default function SurahScreen() {
                     bookmarks={bookmarksList}
                     ayahBookmarks={ayahBookmarks}
                     useArabicNumbers={useArabicNumbers}
+                    fontScale={fontScale}
                     highlightAyah={(targetAyah && currentSurahId) ? { surahId: currentSurahId, ayahNumber: targetAyah } : null}
                     onAyahPress={(ayah: any) => {
                         setSelectedAyah({ ...ayah, page: pageNumber });
@@ -462,7 +480,7 @@ export default function SurahScreen() {
                 />
             </View>
         );
-    }, [theme, bookmarksList, ayahBookmarks, useArabicNumbers, targetAyah, currentSurahId]);
+    }, [theme, bookmarksList, ayahBookmarks, useArabicNumbers, fontScale, targetAyah, currentSurahId]);
 
     const headerTitle = useMemo(() => {
         return currentSurah?.name || "القرآن الكريم"; // Use Arabic Name or Generic
@@ -615,6 +633,16 @@ export default function SurahScreen() {
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                     <TouchableOpacity
                         style={[styles.headerButton, { backgroundColor: theme.cardBackground }]}
+                        onPress={() => setSettingsVisible(true)}
+                    >
+                        <Ionicons
+                            name="settings-outline"
+                            size={20}
+                            color={theme.text}
+                        />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.headerButton, { backgroundColor: theme.cardBackground }]}
                         onPress={handleToggleBookmark}
                     >
                         <Ionicons
@@ -691,6 +719,16 @@ export default function SurahScreen() {
                 visible={isNavModalVisible}
                 onClose={() => setNavModalVisible(false)}
                 onNavigate={handleNavigation}
+                theme={theme}
+            />
+
+            <SettingsModal
+                visible={isSettingsVisible}
+                onClose={() => setSettingsVisible(false)}
+                useArabicNumbers={useArabicNumbers}
+                onToggleNumbers={handleToggleNumbers}
+                fontScale={fontScale}
+                onFontScaleChange={handleFontScaleChange}
                 theme={theme}
             />
 

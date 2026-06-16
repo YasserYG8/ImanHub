@@ -72,6 +72,29 @@ export function usePrayerTimes(): UsePrayerTimesReturn {
             setIsLoading(true);
             setError(null);
 
+            // 1. Try to load from cache first for immediate display
+            try {
+                const cachedLocationStr = await storage.getString(KEYS.LOCATION);
+                if (cachedLocationStr) {
+                    const location = JSON.parse(cachedLocationStr);
+                    const times = getPrayerTimes(location);
+                    setPrayerTimes(times);
+
+                    const next = getNextPrayer(times);
+                    const nextInfo: NextPrayerInfo = {
+                        prayer: next.prayer,
+                        time: next.time,
+                        name: PRAYER_NAMES_EN[next.prayer] || 'fajr',
+                        nameAr: PRAYER_NAMES_AR[next.prayer] || 'الفجر',
+                    };
+                    setNextPrayer(nextInfo);
+                    setCurrentPrayer(getCurrentPrayerFromNext(next.prayer));
+                }
+            } catch (e) {
+                console.log('Error reading cached location:', e);
+            }
+
+            // 2. Fetch fresh location
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
                 setError('يرجى السماح بالوصول إلى الموقع');
@@ -81,7 +104,7 @@ export function usePrayerTimes(): UsePrayerTimesReturn {
 
             const location = await Location.getCurrentPositionAsync({});
 
-            // Cache location
+            // Cache location for next time
             storage.set(KEYS.LOCATION, JSON.stringify({
                 latitude: location.coords.latitude,
                 longitude: location.coords.longitude
@@ -106,7 +129,9 @@ export function usePrayerTimes(): UsePrayerTimesReturn {
             setCurrentPrayer(getCurrentPrayerFromNext(next.prayer));
             setIsLoading(false);
         } catch (err) {
-            setError('حدث خطأ في تحميل أوقات الصلاة');
+            console.log('Error fetching prayer times:', err);
+            // Don't set error if we have cached data?
+            // setError('حدث خطأ في تحميل أوقات الصلاة');
             setIsLoading(false);
         }
     }, []);

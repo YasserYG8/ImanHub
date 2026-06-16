@@ -1,12 +1,20 @@
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Dimensions, Modal, ScrollView, Animated } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Dimensions, Platform, StatusBar, Modal } from 'react-native';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useThemeColor';
 import Svg, { Circle } from 'react-native-svg';
 import athkarData from '../../../assets/data/athkar_data.json';
+import Animated, {
+    useSharedValue,
+    useAnimatedProps,
+    withTiming,
+    runOnJS,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 
 const { width, height } = Dimensions.get('window');
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 type AthkarItem = {
     id: string;
@@ -18,7 +26,163 @@ type AthkarItem = {
     summary?: string;
 };
 
+// --- Child Components ---
 
+const CircularProgress = ({
+    current,
+    target,
+    theme,
+    color
+}: {
+    current: number;
+    target: number;
+    theme: any;
+    color: string;
+}) => {
+    const radius = 50;
+    const strokeWidth = 4;
+    const size = 120;
+    const center = size / 2;
+    const circumference = 2 * Math.PI * radius;
+    const progress = useSharedValue(0);
+
+    // Keep Progress Animation
+    useEffect(() => {
+        progress.value = withTiming(current / target, { duration: 500 });
+    }, [current, target]);
+
+    const animatedProps = useAnimatedProps(() => {
+        const strokeDashoffset = circumference - (progress.value * circumference);
+        return {
+            strokeDashoffset: strokeDashoffset,
+        };
+    });
+
+    return (
+        <View style={styles.progressContainer}>
+            <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                {/* Background Track */}
+                <Circle
+                    cx={center}
+                    cy={center}
+                    r={radius}
+                    stroke={theme.border}
+                    strokeWidth={strokeWidth}
+                    fill="transparent"
+                />
+
+                {/* Progress Arc */}
+                <AnimatedCircle
+                    cx={center}
+                    cy={center}
+                    r={radius}
+                    stroke={theme.primary}
+                    strokeWidth={strokeWidth}
+                    fill="transparent"
+                    strokeDasharray={circumference}
+                    animatedProps={animatedProps}
+                    strokeLinecap="round"
+                    rotation={-90}
+                    originX={center}
+                    originY={center}
+                />
+            </Svg>
+
+            {/* Center Counter */}
+            <View style={styles.progressTextContainer}>
+                <Text style={[styles.progressMainNumber, { color: theme.text }]}>
+                    {current}
+                </Text>
+                <Text style={[styles.progressLimit, { color: theme.textSecondary }]}>/{target}</Text>
+            </View>
+        </View>
+    );
+};
+
+const AthkarCard = ({
+    item,
+    count,
+    isActive,
+    onIncrement,
+    theme,
+    width,
+}: {
+    item: AthkarItem;
+    count: number;
+    isActive: boolean;
+    onIncrement: () => void;
+    theme: any;
+    width: number;
+}) => {
+    const isCompleted = count >= item.count;
+
+    const handlePress = () => {
+        if (!isActive || isCompleted) return;
+
+        // Removed Pulse Animation
+
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onIncrement();
+    };
+
+    return (
+        <View style={{ width, alignItems: 'center', justifyContent: 'center' }}>
+            <TouchableOpacity
+                style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' }}
+                onPress={handlePress}
+                activeOpacity={0.8}
+                disabled={!isActive}
+            >
+                {/* Removed Animated.View wrapper (No entry/scale animation) */}
+                {/* Fixed Layout Container */}
+                <View style={styles.cardWrapper}>
+                    {/* Top Filler - Push Text to visual center-top */}
+                    <View style={styles.topSection} />
+
+                    {/* Text Area - Fixed Height Region */}
+                    <View style={styles.textRegion}>
+                        <Animated.ScrollView
+                            showsVerticalScrollIndicator={false}
+                            contentContainerStyle={styles.textContent}
+                        >
+                            <Text style={[styles.arabicText, { color: theme.text }]}>
+                                {item.arabic}
+                            </Text>
+
+                            {item.summary && (
+                                <Text style={[styles.summaryText, { color: theme.primary }]}>{item.summary}</Text>
+                            )}
+
+                            <Text style={[styles.referenceText, { color: theme.textSecondary }]}>
+                                {item.reference}
+                            </Text>
+                        </Animated.ScrollView>
+                    </View>
+
+                    {/* Progress Indicator */}
+                    <View style={styles.counterWrapper}>
+                        <CircularProgress
+                            current={count}
+                            target={item.count}
+                            theme={theme}
+                            color={theme.primary}
+                        />
+                    </View>
+
+                    {/* Completion Badge */}
+                    {isCompleted && (
+                        <View style={[styles.completedBadge, { backgroundColor: theme.cardBackground }]}>
+                            <Ionicons name="checkmark-circle" size={28} color={theme.primary} />
+                            <Text style={[styles.completedText, { color: theme.text }]}>Completed</Text>
+                        </View>
+                    )}
+                </View>
+            </TouchableOpacity>
+        </View>
+    );
+};
+
+// --- Main Screen ---
 
 export default function AthkarCounterScreen() {
     const { category } = useLocalSearchParams<{ category: string }>();
@@ -26,181 +190,93 @@ export default function AthkarCounterScreen() {
     const router = useRouter();
     const flatListRef = useRef<FlatList>(null);
 
-    // Get athkar for this category
+    // Get Data
     const athkarList: AthkarItem[] = (athkarData as any)[category] || [];
 
-    // Track current index and counts
+    // State
     const [currentIndex, setCurrentIndex] = useState(0);
     const [counts, setCounts] = useState<{ [key: string]: number }>(
         athkarList.reduce((acc, item) => ({ ...acc, [item.id]: 0 }), {})
     );
     const [showList, setShowList] = useState(false);
 
-    const currentAthkar = athkarList[currentIndex];
-    const currentCount = counts[currentAthkar?.id] || 0;
-    const targetCount = currentAthkar?.count || 1;
-    const progress = currentCount / targetCount;
+    // Actions
+    const handleIncrement = useCallback(() => {
+        const currentItem = athkarList[currentIndex];
+        if (!currentItem) return;
 
-    // Calculate total clicks across all athkar
-    const totalClicks = Object.values(counts).reduce((sum, count) => sum + count, 0);
+        setCounts(prev => {
+            const currentCount = prev[currentItem.id] || 0;
+            const newCount = currentCount + 1;
 
-    const completedCount = Object.keys(counts).filter(id => {
-        const item = athkarList.find(a => a.id === id);
-        return item && counts[id] >= item.count;
-    }).length;
+            if (newCount === currentItem.count) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    // Handle tap to increment
-    const handleTap = () => {
-        if (!currentAthkar) return;
+                // Auto-advance
+                if (currentIndex < athkarList.length - 1) {
+                    setTimeout(() => {
+                        const nextIndex = currentIndex + 1;
+                        setCurrentIndex(nextIndex);
+                        flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+                    }, 500);
+                }
+            }
+            return { ...prev, [currentItem.id]: newCount };
+        });
+    }, [currentIndex, athkarList]);
 
-        const newCount = currentCount + 1;
-        setCounts(prev => ({ ...prev, [currentAthkar.id]: newCount }));
-
-        // Auto-advance if completed
-        if (newCount >= targetCount && currentIndex < athkarList.length - 1) {
-            setTimeout(() => {
-                setCurrentIndex(currentIndex + 1);
-                flatListRef.current?.scrollToIndex({ index: currentIndex + 1, animated: true });
-            }, 500);
-        }
-    };
-
-    // Handle manual swipe
-    const handleScroll = (event: any) => {
+    const handleScroll = useCallback((event: any) => {
         const offsetX = event.nativeEvent.contentOffset.x;
         const index = Math.round(offsetX / width);
         if (index !== currentIndex && index >= 0 && index < athkarList.length) {
             setCurrentIndex(index);
         }
-    };
+    }, [currentIndex, athkarList.length]);
 
-    // Circular progress component
-    const CircularProgress = ({ progress, current, target }: { progress: number; current: number; target: number }) => {
-        const radius = 60;
-        const strokeWidth = 8;
-        const circumference = 2 * Math.PI * radius;
-        const strokeDashoffset = circumference - (progress * circumference);
+    const renderItem = useCallback(({ item, index }: { item: AthkarItem; index: number }) => (
+        <AthkarCard
+            item={item}
+            count={counts[item.id] || 0}
+            isActive={index === currentIndex}
+            onIncrement={handleIncrement}
+            theme={theme}
+            width={width}
+        />
+    ), [counts, currentIndex, handleIncrement, theme]);
 
-        return (
-            <View style={styles.progressContainer}>
-                <Svg width="140" height="140" viewBox="0 0 140 140">
-                    <Circle
-                        cx="70"
-                        cy="70"
-                        r={radius}
-                        stroke={theme.border}
-                        strokeOpacity={0.2}
-                        strokeWidth={strokeWidth}
-                        fill="transparent"
-                    />
-                    <Circle
-                        cx="70"
-                        cy="70"
-                        r={radius}
-                        stroke={theme.primary}
-                        strokeWidth={strokeWidth}
-                        fill="transparent"
-                        strokeDasharray={circumference}
-                        strokeDashoffset={strokeDashoffset}
-                        strokeLinecap="round"
-                        rotation={-90}
-                        originX="70"
-                        originY="70"
-                    />
-                </Svg>
-                <View style={styles.progressText}>
-                    <Text style={[styles.progressCount, { color: theme.text }]}>{current}</Text>
-                    <Text style={[styles.progressSeparator, { color: theme.textSecondary }]}>/</Text>
-                    <Text style={[styles.progressTarget, { color: theme.textSecondary }]}>{target}</Text>
-                </View>
-            </View>
-        );
-    };
-
-    // Render athkar card
-    const renderAthkar = ({ item, index }: { item: AthkarItem; index: number }) => {
-        const itemCount = counts[item.id] || 0;
-        const isCompleted = itemCount >= item.count;
-
-        return (
-            <TouchableOpacity
-                style={[styles.card, { width }]}
-                onPress={() => {
-                    if (index === currentIndex && !isCompleted) {
-                        handleTap();
-                    }
-                }}
-                activeOpacity={isCompleted ? 1 : 0.95}
-                disabled={index !== currentIndex}
-            >
-                <ScrollView
-                    contentContainerStyle={styles.cardContent}
-                    showsVerticalScrollIndicator={false}
-                    scrollEnabled={false}
-                >
-                    {/* Progress Circle */}
-                    <CircularProgress
-                        progress={itemCount / item.count}
-                        current={itemCount}
-                        target={item.count}
-                    />
-
-                    {/* Arabic Text */}
-                    <Text style={[styles.arabicText, { color: theme.text }]}>
-                        {item.arabic}
-                    </Text>
-
-                    {/* Transliteration Removed */}
-
-                    {/* Translation Removed */}
-
-                    {/* Reference */}
-                    <Text style={[styles.reference, { color: theme.primary }]}>
-                        {item.reference}
-                    </Text>
-                </ScrollView>
-            </TouchableOpacity>
-        );
-    };
-
-    if (!currentAthkar) {
-        return (
-            <View style={[styles.container, { backgroundColor: theme.background }]}>
-                <Text style={[styles.errorText, { color: theme.text }]}>
-                    لم يتم العثور على أذكار
-                </Text>
-            </View>
-        );
-    }
+    if (athkarList.length === 0) return null;
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
+            <Stack.Screen options={{ headerShown: false }} />
+            <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
+
             {/* Header */}
-            <View style={[styles.header, { backgroundColor: theme.background }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-forward" size={24} color={theme.text} />
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => router.back()} style={[styles.iconButton, { backgroundColor: theme.cardBackground }]}>
+                    <Ionicons name="close" size={24} color={theme.text} />
                 </TouchableOpacity>
-                <View style={styles.headerCenter}>
-                    <Text style={[styles.headerTitle, { color: theme.text }]}>
+
+                <View style={styles.headerTitleContainer}>
+                    <Text style={[styles.headerTitleText, { color: theme.text }]}>
                         {category === 'morning' ? 'أذكار الصباح' :
                             category === 'evening' ? 'أذكار المساء' :
-                                category === 'prayer' ? 'أذكار بعد الصلاة' :
-                                    category === 'sleep' ? 'أذكار النوم' : 'أذكار'}
+                                category === 'prayer' ? 'أذكار الصلاة' :
+                                    category === 'sleep' ? 'أذكار النوم' : 'الأذكار'}
                     </Text>
-                    <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>
-                        {completedCount} / {athkarList.length}
-                    </Text>
+                    <Text style={[styles.headerSubtitleText, { color: theme.textSecondary }]}>{currentIndex + 1} / {athkarList.length}</Text>
                 </View>
-                <TouchableOpacity onPress={() => setShowList(true)} style={styles.listButton}>
+
+                <TouchableOpacity onPress={() => setShowList(true)} style={[styles.iconButton, { backgroundColor: theme.cardBackground }]}>
                     <Ionicons name="list" size={24} color={theme.text} />
                 </TouchableOpacity>
             </View>
 
-            {/* Swipeable Athkar */}
+            {/* Main Content */}
             <FlatList
                 ref={flatListRef}
                 data={athkarList}
-                renderItem={renderAthkar}
+                renderItem={renderItem}
                 keyExtractor={item => item.id}
                 horizontal
                 pagingEnabled
@@ -214,21 +290,6 @@ export default function AthkarCounterScreen() {
                 })}
             />
 
-            {/* Total Clicks Display */}
-            <View
-                style={[styles.countDisplay, {
-                    backgroundColor: theme.cardBackground,
-                    borderColor: theme.border
-                }]}
-            >
-                <Text style={[styles.countDisplayText, { color: theme.text }]}>
-                    {completedCount} / {athkarList.length}
-                </Text>
-                <Text style={[styles.countDisplayLabel, { color: theme.textSecondary }]}>
-                    الأذكار المكتملة
-                </Text>
-            </View>
-
             {/* Swipe Hint */}
             <View style={styles.swipeHint}>
                 <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
@@ -237,6 +298,9 @@ export default function AthkarCounterScreen() {
                 </Text>
                 <Ionicons name="chevron-back" size={16} color={theme.textSecondary} />
             </View>
+
+            {/* Bottom Safe Area Spacer */}
+            <View style={{ height: 20 }} />
 
             {/* List Modal */}
             <Modal
@@ -255,7 +319,7 @@ export default function AthkarCounterScreen() {
                                 <Ionicons name="close" size={28} color={theme.text} />
                             </TouchableOpacity>
                         </View>
-                        <ScrollView>
+                        <Animated.ScrollView>
                             {athkarList.map((item, index) => (
                                 <TouchableOpacity
                                     key={item.id}
@@ -289,7 +353,7 @@ export default function AthkarCounterScreen() {
                                     </View>
                                 </TouchableOpacity>
                             ))}
-                        </ScrollView>
+                        </Animated.ScrollView>
                     </View>
                 </View>
             </Modal>
@@ -306,101 +370,117 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
-        paddingTop: 50,
-        paddingBottom: 16,
+        paddingTop: Platform.OS === 'ios' ? 60 : 40,
+        paddingBottom: 20,
+        zIndex: 10,
     },
-    backButton: {
-        padding: 8,
-    },
-    headerCenter: {
-        flex: 1,
+    iconButton: {
+        width: 44,
+        height: 44,
         alignItems: 'center',
-    },
-    headerTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-    },
-    headerSubtitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        marginTop: 2,
-    },
-    listButton: {
-        padding: 8,
-    },
-    card: {
-        height: height - 250,
-    },
-    cardContent: {
-        padding: 20,
-        alignItems: 'center',
-    },
-    progressContainer: {
-        width: 140,
-        height: 140,
         justifyContent: 'center',
+        borderRadius: 22,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    headerTitleContainer: {
         alignItems: 'center',
-        marginBottom: 32,
     },
-    progressText: {
-        position: 'absolute',
-        flexDirection: 'row',
-        alignItems: 'baseline',
+    headerTitleText: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        marginBottom: 4,
+        fontFamily: 'Amiri-Bold',
     },
-    progressCount: {
-        fontSize: 36,
-        fontWeight: '800',
+    headerSubtitleText: {
+        fontSize: 14,
     },
-    progressSeparator: {
-        fontSize: 24,
-        fontWeight: '600',
-        marginHorizontal: 4,
+    cardWrapper: {
+        flex: 1,
+        width: width,
+        alignItems: 'center',
+        justifyContent: 'space-between', // Distribute vertically
     },
-    progressTarget: {
-        fontSize: 24,
-        fontWeight: '600',
+    topSection: {
+        height: height * 0.1, // Fixed top spacing (10%)
+    },
+    textRegion: {
+        height: height * 0.55, // Fixed text area height (55%)
+        width: width - 40,
+        alignItems: 'center',
+        // content is centered inside scrollview via styles.textContent
+    },
+    textContent: {
+        alignItems: 'center',
+        paddingVertical: 10,
+        minHeight: '100%',
+        justifyContent: 'center', // Center text vertically if short
     },
     arabicText: {
-        fontSize: 24,
-        fontWeight: '600',
+        fontSize: 28,
         textAlign: 'center',
-        lineHeight: 42,
-        marginBottom: 20,
-    },
-    transliteration: {
-        fontSize: 16,
-        fontWeight: '600',
-        textAlign: 'center',
-        marginBottom: 12,
-        fontStyle: 'italic',
-    },
-    translation: {
-        fontSize: 15,
-        textAlign: 'center',
-        lineHeight: 24,
+        fontFamily: 'Amiri-Regular',
+        lineHeight: 50,
         marginBottom: 16,
     },
-    reference: {
-        fontSize: 13,
-        fontWeight: '600',
-        textAlign: 'center',
-    },
-    countDisplay: {
-        marginHorizontal: 20,
+    summaryText: {
+        fontSize: 16,
         marginBottom: 8,
-        paddingVertical: 16,
-        borderRadius: 16,
-        alignItems: 'center',
-        borderWidth: 2,
+        fontWeight: '600',
+        fontFamily: 'Amiri-Bold',
     },
-    countDisplayText: {
+    referenceText: {
+        fontSize: 13,
+        marginBottom: 8,
+    },
+    counterWrapper: {
+        height: height * 0.25, // Fixed bottom area (25%) for counter
+        alignItems: 'center',
+        justifyContent: 'flex-start', // Top align inside this bottom region
+        paddingTop: 20,
+    },
+    progressContainer: {
+        width: 120,
+        height: 120,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    progressTextContainer: {
+        position: 'absolute',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    progressMainNumber: {
         fontSize: 32,
         fontWeight: '800',
+        fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
+        includeFontPadding: false,
     },
-    countDisplayLabel: {
-        fontSize: 12,
-        fontWeight: '600',
-        marginTop: 2,
+    progressLimit: {
+        fontSize: 16,
+        marginTop: -2,
+    },
+    completedBadge: {
+        position: 'absolute',
+        bottom: 120,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 30,
+        gap: 8,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    completedText: {
+        fontWeight: 'bold',
+        fontSize: 16,
     },
     swipeHint: {
         flexDirection: 'row-reverse',
@@ -412,11 +492,6 @@ const styles = StyleSheet.create({
     swipeHintText: {
         fontSize: 12,
         fontWeight: '600',
-    },
-    errorText: {
-        fontSize: 18,
-        textAlign: 'center',
-        marginTop: 100,
     },
     modalOverlay: {
         flex: 1,

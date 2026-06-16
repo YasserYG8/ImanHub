@@ -82,12 +82,23 @@ export default function HomeScreen() {
         const data = await response.json();
 
         if (data && data.address) {
+          // Get the most specific location available
+          const suburb = data.address.suburb || data.address.neighbourhood || data.address.district;
           const city = data.address.city || data.address.town || data.address.village || data.address.county || data.address.state_district;
           const country = data.address.country;
 
-          const parts = [city, country].filter(Boolean);
-          if (parts.length > 0) {
-            setLocationName(parts.join('، ')); // Use Arabic comma
+          // Prefer suburb/district over city for more specific location (e.g., "Bardo" instead of "Tunis")
+          const location = suburb || city;
+
+          // Build location string, avoiding duplicates (e.g., "Tunis, Tunis")
+          if (location && country && location !== country) {
+            setLocationName(`${location}، ${country}`);
+            return;
+          } else if (location) {
+            setLocationName(location);
+            return;
+          } else if (country) {
+            setLocationName(country);
             return;
           }
         }
