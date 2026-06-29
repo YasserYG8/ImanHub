@@ -1,5 +1,5 @@
 
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, ScrollView, Modal, Pressable, Alert, ImageBackground, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, ScrollView, Modal, Pressable, Alert, ImageBackground, StatusBar, Dimensions } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useState, useMemo, useCallback } from 'react';
 import quranData from '../../assets/data/quran/quran.json';
@@ -13,26 +13,38 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
 import { SettingsModal } from '@/components/quran/SettingsModal';
 import { getSurahFromPage } from '@/utils/quranPageMapping';
+import { BlurView } from 'expo-blur';
+
+const { width } = Dimensions.get('window');
 
 type FilterType = 'all' | 'meccan' | 'medinan';
 type SortType = 'number' | 'ayahs';
 
 // Custom Chip Components
-const FilterChip = ({ label, isSelected, activeColor, theme, onPress }: any) => {
+const FilterChip = ({ label, isSelected, activeColor, theme, isDark, onPress }: any) => {
     return (
         <TouchableOpacity
             style={[
                 styles.filterChip,
                 {
-                    backgroundColor: isSelected ? activeColor : theme.cardBackground,
-                    borderColor: isSelected ? activeColor : theme.border,
+                    backgroundColor: isSelected 
+                        ? activeColor 
+                        : (isDark ? 'rgba(39, 39, 42, 0.4)' : theme.cardBackground),
+                    borderColor: isSelected 
+                        ? activeColor 
+                        : (isDark ? 'rgba(255, 255, 255, 0.08)' : theme.border),
+                    borderWidth: 1,
                 }
             ]}
             onPress={onPress}
         >
             <Text style={[
                 styles.filterChipText,
-                { color: isSelected ? '#FFFFFF' : theme.text }
+                { 
+                    color: isSelected ? '#FFFFFF' : theme.text,
+                    fontFamily: 'Amiri-Bold',
+                    fontSize: 16,
+                }
             ]}>
                 {label}
             </Text>
@@ -143,7 +155,14 @@ export default function QuranScreen() {
     const renderItem = ({ item, index }: { item: any, index: number }) => (
         <Animated.View entering={FadeInDown.delay(index * 50).springify()} layout={Layout.springify()}>
             <TouchableOpacity
-                style={[styles.card, { backgroundColor: theme.cardBackground }]}
+                style={[
+                    styles.card, 
+                    { 
+                        backgroundColor: isDark ? 'rgba(39, 39, 42, 0.5)' : theme.cardBackground,
+                        borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : theme.border,
+                        borderWidth: 1,
+                    }
+                ]}
                 onPress={() => router.push({
                     pathname: '/quran/[id]',
                     params: { id: item.id }
@@ -155,12 +174,18 @@ export default function QuranScreen() {
                     name="flower-outline"
                     size={80}
                     color={theme.primary}
-                    style={{ position: 'absolute', right: -20, bottom: -20, opacity: 0.05, transform: [{ rotate: '45deg' }] }}
+                    style={{ position: 'absolute', right: -20, bottom: -20, opacity: 0.03, transform: [{ rotate: '45deg' }] }}
                 />
 
                 <View style={styles.numberContainer}>
-                    <View style={[styles.numberBadge, { borderColor: theme.primary }]}>
-                        <Text style={[styles.numberText, { color: theme.primary }]}>{item.id}</Text>
+                    <View style={[
+                        styles.numberBadge, 
+                        { 
+                            borderColor: theme.primary,
+                            backgroundColor: isDark ? 'rgba(0, 108, 73, 0.1)' : 'rgba(16, 185, 129, 0.05)'
+                        }
+                    ]}>
+                        <Text style={[styles.numberText, { color: theme.primary, fontWeight: '700' }]}>{item.id}</Text>
                     </View>
                 </View>
 
@@ -176,10 +201,10 @@ export default function QuranScreen() {
 
                     <View style={styles.leftContainer}>
                         <View style={[styles.typeBadge, {
-                            backgroundColor: item.type === 'meccan' ? 'rgba(139, 92, 246, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                            backgroundColor: item.type === 'meccan' ? 'rgba(171, 71, 188, 0.12)' : 'rgba(0, 108, 73, 0.12)',
                         }]}>
                             <Text style={[styles.typeText, {
-                                color: item.type === 'meccan' ? '#8B5CF6' : '#10B981'
+                                color: item.type === 'meccan' ? '#AB47BC' : '#10B981'
                             }]}>
                                 {item.type === 'meccan' ? 'مكية' : 'مدنية'}
                             </Text>
@@ -222,52 +247,98 @@ export default function QuranScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
-            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} translucent backgroundColor="transparent" />
 
-            {/* Custom Header with Gradient */}
-            <LinearGradient
-                colors={['#10B981', '#059669']} // Keep brand green for header, looks good in dark too
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.headerGradient}
-            >
+            {/* Ambient Background Glows (Dark Mode Only) */}
+            {isDark && (
+                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                    <LinearGradient
+                        colors={['rgba(171, 71, 188, 0.08)', 'transparent']}
+                        style={{ position: 'absolute', top: -50, right: -50, width: width * 0.9, height: width * 0.9, borderRadius: (width * 0.9) / 2 }}
+                        start={{ x: 0.5, y: 0.5 }}
+                        end={{ x: 1, y: 1 }}
+                    />
+                    <LinearGradient
+                        colors={['rgba(0, 108, 73, 0.08)', 'transparent']}
+                        style={{ position: 'absolute', bottom: 120, left: -50, width: width * 0.9, height: width * 0.9, borderRadius: (width * 0.9) / 2 }}
+                        start={{ x: 0.5, y: 0.5 }}
+                        end={{ x: 0, y: 0 }}
+                    />
+                </View>
+            )}
+
+            {/* Frosted Glass Header */}
+            <View style={[styles.headerWrapper, { borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.08)' : theme.border }]}>
+                <BlurView
+                    intensity={80}
+                    tint={isDark ? 'dark' : 'light'}
+                    style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(24, 24, 27, 0.75)' : 'rgba(255, 255, 255, 0.75)' }]}
+                />
                 <View style={styles.headerContent}>
                     <View style={styles.headerTopRow}>
                         <TouchableOpacity
-                            style={styles.iconButton}
+                            style={[
+                                styles.iconButton, 
+                                { 
+                                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.03)',
+                                    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+                                    borderWidth: 1,
+                                }
+                            ]}
                             onPress={() => setSettingsVisible(true)}
                         >
-                            <Ionicons name="settings-outline" size={22} color="#FFF" />
+                            <Ionicons name="settings-outline" size={22} color={theme.text} />
                         </TouchableOpacity>
-                        <Text style={styles.headerTitle}>القرآن الكريم</Text>
+                        <Text style={[styles.headerTitle, { color: theme.text, fontFamily: 'Amiri-Bold', fontSize: 24 }]}>القرآن الكريم</Text>
                         <TouchableOpacity
-                            style={styles.iconButton}
+                            style={[
+                                styles.iconButton, 
+                                { 
+                                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.03)',
+                                    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+                                    borderWidth: 1,
+                                }
+                            ]}
                             onPress={() => setIsBookmarksModalVisible(true)}
                         >
-                            <Ionicons name="bookmarks" size={22} color="#FFF" />
+                            <Ionicons name="bookmarks-outline" size={22} color={theme.text} />
                         </TouchableOpacity>
                     </View>
 
                     {/* Search Bar & Page Jump */}
                     <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-                        <View style={styles.searchContainerHeader}>
-                            <Ionicons name="search" size={20} color="rgba(255,255,255,0.7)" />
+                        <View style={[
+                            styles.searchContainerHeader, 
+                            { 
+                                backgroundColor: isDark ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.8)', 
+                                borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : theme.border 
+                            }
+                        ]}>
+                            <Ionicons name="search" size={20} color={theme.textSecondary} />
                             <TextInput
-                                style={styles.searchInputHeader}
+                                style={[styles.searchInputHeader, { color: theme.text }]}
                                 placeholder="ابحث عن سورة..."
-                                placeholderTextColor="rgba(255,255,255,0.7)"
+                                placeholderTextColor={theme.textSecondary}
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
+                                textAlign="right"
                             />
                             {searchQuery.length > 0 && (
                                 <TouchableOpacity onPress={() => setSearchQuery('')}>
-                                    <Ionicons name="close-circle" size={20} color="#FFF" />
+                                    <Ionicons name="close-circle" size={20} color={theme.textSecondary} />
                                 </TouchableOpacity>
                             )}
                         </View>
 
                         <TouchableOpacity
-                            style={styles.pageJumpButton}
+                            style={[
+                                styles.pageJumpButton, 
+                                { 
+                                    backgroundColor: theme.primary,
+                                    borderColor: theme.primary,
+                                    borderWidth: 1,
+                                }
+                            ]}
                             onPress={() => setIsPageSearchVisible(true)}
                         >
                             <Ionicons name="book-outline" size={20} color="#FFF" />
@@ -275,18 +346,20 @@ export default function QuranScreen() {
                         </TouchableOpacity>
                     </View>
                 </View>
-
-                {/* Decorative */}
-                <View style={styles.headerPattern}>
-                    <Ionicons name="book" size={120} color="rgba(255,255,255,0.1)" />
-                </View>
-            </LinearGradient>
+            </View>
 
             <View style={styles.bodyContainer}>
                 {/* Last Read Banner (Mini) */}
                 {lastRead && lastReadSurah && (
                     <TouchableOpacity
-                        style={[styles.continueBanner, { backgroundColor: theme.cardBackground, borderColor: theme.primary }]}
+                        style={[
+                            styles.continueBanner, 
+                            { 
+                                backgroundColor: isDark ? 'rgba(39, 39, 42, 0.5)' : theme.cardBackground, 
+                                borderColor: theme.primary,
+                                borderWidth: 1,
+                            }
+                        ]}
                         onPress={() => router.push({
                             pathname: '/quran/[id]',
                             params: { id: lastRead.surahId, page: lastRead.page }
@@ -313,7 +386,16 @@ export default function QuranScreen() {
                         contentContainerStyle={styles.filtersRow}
                     >
                         <TouchableOpacity
-                            style={[styles.filterChip, { backgroundColor: theme.cardBackground, borderColor: theme.border, width: 40, paddingHorizontal: 0 }]}
+                            style={[
+                                styles.filterChip, 
+                                { 
+                                    backgroundColor: isDark ? 'rgba(39, 39, 42, 0.4)' : theme.cardBackground, 
+                                    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : theme.border, 
+                                    borderWidth: 1,
+                                    width: 40, 
+                                    paddingHorizontal: 0 
+                                }
+                            ]}
                             onPress={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
                         >
                             <Ionicons name={sortOrder === 'asc' ? "arrow-down" : "arrow-up"} size={18} color={theme.text} />
@@ -324,13 +406,15 @@ export default function QuranScreen() {
                             isSelected={filterType === 'all'}
                             activeColor={theme.primary}
                             theme={theme}
+                            isDark={isDark}
                             onPress={() => setFilterType('all')}
                         />
                         <FilterChip
                             label="مكية"
                             isSelected={filterType === 'meccan'}
-                            activeColor="#8B5CF6"
+                            activeColor="#AB47BC"
                             theme={theme}
+                            isDark={isDark}
                             onPress={() => setFilterType('meccan')}
                         />
                         <FilterChip
@@ -338,6 +422,7 @@ export default function QuranScreen() {
                             isSelected={filterType === 'medinan'}
                             activeColor="#10B981"
                             theme={theme}
+                            isDark={isDark}
                             onPress={() => setFilterType('medinan')}
                         />
                     </ScrollView>
@@ -544,13 +629,15 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    headerGradient: {
-        paddingTop: 50,
-        paddingBottom: 24,
+    headerWrapper: {
+        paddingTop: 54,
+        paddingBottom: 16,
         paddingHorizontal: 20,
-        borderBottomLeftRadius: 32,
-        borderBottomRightRadius: 32,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
         zIndex: 10,
+        overflow: 'hidden',
+        borderBottomWidth: 1,
     },
     headerContent: {
         zIndex: 2,
@@ -559,18 +646,16 @@ const styles = StyleSheet.create({
         flexDirection: 'row-reverse',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: 16,
     },
     headerTitle: {
         fontSize: 24,
         fontWeight: '800',
-        color: '#FFF',
     },
     iconButton: {
         width: 40,
         height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.2)',
+        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -578,19 +663,16 @@ const styles = StyleSheet.create({
         flex: 1,
         flexDirection: 'row-reverse',
         alignItems: 'center',
-        backgroundColor: 'rgba(0,0,0,0.15)',
-        borderRadius: 16,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        gap: 12,
+        borderRadius: 14,
+        paddingHorizontal: 12,
+        height: 44,
+        gap: 8,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)',
     },
     searchInputHeader: {
         flex: 1,
-        fontSize: 16,
+        fontSize: 15,
         textAlign: 'right',
-        color: '#FFF',
         fontWeight: '500',
     },
     headerPattern: {
@@ -809,18 +891,18 @@ const styles = StyleSheet.create({
         fontFamily: 'Amiri-Bold'
     },
     pageJumpButton: {
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        height: 48,
-        paddingHorizontal: 16,
-        borderRadius: 16,
+        height: 44,
+        paddingHorizontal: 14,
+        borderRadius: 14,
         justifyContent: 'center',
         alignItems: 'center',
-        gap: 4
+        flexDirection: 'row',
+        gap: 6
     },
     pageJumpText: {
         color: '#FFF',
-        fontSize: 10,
-        fontWeight: '700'
+        fontSize: 12,
+        fontFamily: 'Amiri-Bold',
     },
     smallModalContent: {
         borderRadius: 24,

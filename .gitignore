@@ -41,3 +41,5 @@ app-example
 # generated native folders
 /ios
 /android
+.agents/gen-lang-client-0037240668-be1644cfb45f.json
+.agents/mcp_config.json

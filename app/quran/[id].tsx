@@ -6,6 +6,8 @@ import { getSurahStartPage, getSurahFromPage } from '@/utils/quranPageMapping';
 import { getArabicSurahName } from '@/utils/arabicSurahNames';
 import { NavigationModal } from '@/components/quran/NavigationModal';
 import { SettingsModal } from '@/components/quran/SettingsModal';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 
@@ -82,33 +84,61 @@ const AyahMenu = ({ visible, onClose, onAction, ayah, theme, isDark, useArabicNu
                 activeOpacity={1}
                 onPress={onClose}
             >
-                {/* Reference style: Dark popup with list */}
-                <View style={[styles.menuContainer, { backgroundColor: '#1A1A1A', borderColor: '#333', borderWidth: 1 }]}>
+                <BlurView
+                    intensity={40}
+                    tint="dark"
+                    style={StyleSheet.absoluteFill}
+                />
+                
+                <View style={[
+                    styles.menuContainer, 
+                    { 
+                        backgroundColor: isDark ? 'rgba(30, 30, 32, 0.9)' : 'rgba(255, 255, 255, 0.95)', 
+                        borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)', 
+                        borderWidth: 1 
+                    }
+                ]}>
 
                     {/* Header */}
                     <View style={styles.menuHeader}>
-                        <View>
-                            <Text style={[styles.menuTitle, { color: '#FFF' }]}>
-                                {ayah.surahName} : {useArabicNumbers ? ayah.numberInSurah.toLocaleString('ar-EG') : ayah.numberInSurah}
-                            </Text>
-                        </View>
+                        <Text style={[styles.menuTitle, { color: theme.text, fontFamily: 'Amiri-Bold' }]}>
+                            {ayah.surahName} • آية {useArabicNumbers ? ayah.numberInSurah.toLocaleString('ar-EG') : ayah.numberInSurah}
+                        </Text>
                     </View>
 
                     {/* Divider */}
-                    <View style={[styles.menuDivider, { backgroundColor: '#333' }]} />
+                    <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
 
                     {/* List Actions */}
                     {actions.map((action) => (
                         <TouchableOpacity
                             key={action.id}
-                            style={styles.menuItem}
+                            style={[
+                                styles.menuItem,
+                                { 
+                                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
+                                    marginBottom: 8,
+                                    paddingHorizontal: 12,
+                                    borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
+                                    borderWidth: 1,
+                                }
+                            ]}
                             onPress={() => {
                                 onAction(action.id, ayah);
                                 onClose();
                             }}
                         >
-                            <Ionicons name={action.icon as any} size={22} color={action.color || '#FFF'} />
-                            <Text style={[styles.menuItemText, { color: action.color || '#FFF' }]}>{action.label}</Text>
+                            <Ionicons name={action.icon as any} size={22} color={action.color || theme.text} />
+                            <Text style={[
+                                styles.menuItemText, 
+                                { 
+                                    color: action.color || theme.text,
+                                    fontFamily: 'Amiri-Bold',
+                                    fontSize: 16 
+                                }
+                            ]}>
+                                {action.label}
+                            </Text>
                         </TouchableOpacity>
                     ))}
                 </View>
@@ -119,7 +149,7 @@ const AyahMenu = ({ visible, onClose, onAction, ayah, theme, isDark, useArabicNu
 
 // Duplicate SurahHeader removed
 
-const QuranTextPage = React.memo(({ pageNumber, theme, onAyahPress, bookmarks, ayahBookmarks, useArabicNumbers, highlightAyah, fontScale = 1.0 }: any) => {
+const QuranTextPage = React.memo(({ pageNumber, theme, isDark, onAyahPress, bookmarks, ayahBookmarks, useArabicNumbers, highlightAyah, fontScale = 1.0 }: any) => {
     const [ayahs, setAyahs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -241,6 +271,14 @@ const QuranTextPage = React.memo(({ pageNumber, theme, onAyahPress, bookmarks, a
     return (
         <ScrollView
             ref={scrollViewRef}
+            style={[
+                styles.textPageScrollView,
+                {
+                    backgroundColor: isDark ? 'rgba(39, 39, 42, 0.35)' : 'rgba(255, 255, 255, 0.6)',
+                    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : theme.border,
+                    borderWidth: 1,
+                }
+            ]}
             contentContainerStyle={styles.textPageContent}
             showsVerticalScrollIndicator={false}
         >
@@ -338,6 +376,7 @@ const QuranTextPage = React.memo(({ pageNumber, theme, onAyahPress, bookmarks, a
         </ScrollView>
     );
 });
+QuranTextPage.displayName = 'QuranTextPage';
 
 // ...
 
@@ -468,6 +507,7 @@ export default function SurahScreen() {
                 <QuranTextPage
                     pageNumber={pageNumber}
                     theme={theme}
+                    isDark={isDark}
                     bookmarks={bookmarksList}
                     ayahBookmarks={ayahBookmarks}
                     useArabicNumbers={useArabicNumbers}
@@ -480,7 +520,7 @@ export default function SurahScreen() {
                 />
             </View>
         );
-    }, [theme, bookmarksList, ayahBookmarks, useArabicNumbers, fontScale, targetAyah, currentSurahId]);
+    }, [theme, isDark, bookmarksList, ayahBookmarks, useArabicNumbers, fontScale, targetAyah, currentSurahId]);
 
     const headerTitle = useMemo(() => {
         return currentSurah?.name || "القرآن الكريم"; // Use Arabic Name or Generic
@@ -608,22 +648,58 @@ export default function SurahScreen() {
             }
         ]}>
 
-            {/* Header */}
-            <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
+            {/* Ambient Background Glows (Dark Mode Only) */}
+            {isDark && (
+                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                    <LinearGradient
+                        colors={['rgba(171, 71, 188, 0.05)', 'transparent']}
+                        style={{ position: 'absolute', top: -50, right: -50, width: width * 0.9, height: width * 0.9, borderRadius: (width * 0.9) / 2 }}
+                        start={{ x: 0.5, y: 0.5 }}
+                        end={{ x: 1, y: 1 }}
+                    />
+                    <LinearGradient
+                        colors={['rgba(0, 108, 73, 0.05)', 'transparent']}
+                        style={{ position: 'absolute', bottom: 120, left: -50, width: width * 0.9, height: width * 0.9, borderRadius: (width * 0.9) / 2 }}
+                        start={{ x: 0.5, y: 0.5 }}
+                        end={{ x: 0, y: 0 }}
+                    />
+                </View>
+            )}
+
+            {/* Frosted Glass Header */}
+            <View style={[styles.header, { borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.08)' : theme.border, borderBottomWidth: 1 }]}>
+                <BlurView
+                    intensity={80}
+                    tint={isDark ? 'dark' : 'light'}
+                    style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(24, 24, 27, 0.75)' : 'rgba(255, 255, 255, 0.75)' }]}
+                />
                 <TouchableOpacity
-                    style={[styles.headerButton, { backgroundColor: theme.cardBackground }]}
+                    style={[
+                        styles.headerButton, 
+                        { 
+                            backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
+                            borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                            borderWidth: 1
+                        }
+                    ]}
                     onPress={() => router.back()}
                 >
                     <Ionicons name="arrow-forward" size={24} color={theme.text} />
                 </TouchableOpacity>
-                {/* Arrow Forward for RTL Back Button context (or keep Arrow Back and flip logic? Usually arrow-forward is "Back" in RTL if not mirrored automatically. Let's stick to arrow-forward for visual RTL 'Right' pointing) - Wait, arrow-back points Left. In RTL, Back is Right. So arrow-forward points Right.*/}
 
                 <TouchableOpacity
-                    style={[styles.titleContainer, { backgroundColor: theme.cardBackground }]}
+                    style={[
+                        styles.titleContainer, 
+                        { 
+                            backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
+                            borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                            borderWidth: 1
+                        }
+                    ]}
                     onPress={() => setNavModalVisible(true)}
                 >
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                        <Text style={[styles.headerTitle, { color: theme.primary, fontFamily: 'Amiri-Bold', fontSize: 20 }]}>
+                        <Text style={[styles.headerTitle, { color: theme.primary, fontFamily: 'Amiri-Bold', fontSize: 22 }]}>
                             {currentSurah ? getArabicSurahName(currentSurah.id) : ""}
                         </Text>
                         <Ionicons name="chevron-down-circle-outline" size={16} color={theme.primary} />
@@ -632,7 +708,14 @@ export default function SurahScreen() {
 
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                     <TouchableOpacity
-                        style={[styles.headerButton, { backgroundColor: theme.cardBackground }]}
+                        style={[
+                            styles.headerButton, 
+                            { 
+                                backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
+                                borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                                borderWidth: 1
+                            }
+                        ]}
                         onPress={() => setSettingsVisible(true)}
                     >
                         <Ionicons
@@ -642,7 +725,14 @@ export default function SurahScreen() {
                         />
                     </TouchableOpacity>
                     <TouchableOpacity
-                        style={[styles.headerButton, { backgroundColor: theme.cardBackground }]}
+                        style={[
+                            styles.headerButton, 
+                            { 
+                                backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
+                                borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                                borderWidth: 1
+                            }
+                        ]}
                         onPress={handleToggleBookmark}
                     >
                         <Ionicons
@@ -666,15 +756,8 @@ export default function SurahScreen() {
                     showsHorizontalScrollIndicator={false}
                     initialScrollIndex={initialIndex}
                     getItemLayout={getItemLayout}
-                    // Adjust Momentum logic for Inverted List?
-                    // FlatList inverted reverses the rendering order. Index 0 is at right.
-                    // Swipe Left (scroll right) goes to Index 1?
-                    // No, Inverted means start from Right. Swipe Left moves to Left content (Index 1).
-                    // Logic for page calculation stays same if contentOffset works accurately.
                     onMomentumScrollEnd={(ev) => {
                         const newIndex = Math.round(ev.nativeEvent.contentOffset.x / width);
-                        // Inverted might affect index calculation depending on platform? 
-                        // Usually RN handles this transparently for horizontal lists.
                         const newPage = newIndex + 1;
                         if (newPage !== currentPage) {
                             setCurrentPage(newPage);
@@ -690,7 +773,14 @@ export default function SurahScreen() {
                 />
 
                 {/* Bottom Page Number Footer */}
-                <View style={styles.footerContainer}>
+                <View style={[
+                    styles.footerContainer, 
+                    { 
+                        backgroundColor: isDark ? 'rgba(39, 39, 42, 0.7)' : 'rgba(255,255,255,0.85)',
+                        borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0,0,0,0.05)',
+                        borderWidth: 1 
+                    }
+                ]}>
                     <Text style={[styles.footerPageText, { color: theme.textSecondary }]}>
                         {useArabicNumbers
                             ? currentPage.toLocaleString('ar-EG')
@@ -978,5 +1068,12 @@ const styles = StyleSheet.create({
         marginTop: scale(18), // "Margin top ... 18px"
         marginBottom: scale(16), // "Margin bottom ... 16px"
         width: '100%'
+    },
+    textPageScrollView: {
+        flex: 1,
+        marginHorizontal: 16,
+        marginVertical: 12,
+        borderRadius: 24,
+        overflow: 'hidden',
     }
 });
