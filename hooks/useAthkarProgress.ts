@@ -68,7 +68,7 @@ export const useAthkarProgress = () => {
 
     const getCategoryStats = (categoryId: string) => {
         const categoryData = (athkarData as any)[categoryId] || [];
-        if (!categoryData.length) return { completedItems: 0, totalItems: 0, percentage: 0 };
+        if (!categoryData.length) return { completedItems: 0, totalItems: 0, totalReads: 0, totalTargets: 0, percentage: 0 };
 
         const categoryProgress = progress[categoryId] || {};
         let completedItems = 0;

@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useThemeColor';
+import { useThemeContext } from '@/context/ThemeContext';
 import Svg, { Circle } from 'react-native-svg';
 import athkarData from '../../../assets/data/athkar_data.json';
 import Animated, {
@@ -187,6 +188,7 @@ const AthkarCard = ({
 export default function AthkarCounterScreen() {
     const { category } = useLocalSearchParams<{ category: string }>();
     const theme = useTheme();
+    const { isDark } = useThemeContext();
     const router = useRouter();
     const flatListRef = useRef<FlatList>(null);
 
@@ -249,7 +251,7 @@ export default function AthkarCounterScreen() {
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             <Stack.Screen options={{ headerShown: false }} />
-            <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
             {/* Header */}
             <View style={styles.header}>
