@@ -1,6 +1,7 @@
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView, ImageBackground, Dimensions, Platform, Image, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView, ImageBackground, Dimensions, Platform, Image, Pressable, Modal, TextInput, FlatList } from 'react-native';
 import { useEffect, useState } from 'react';
 import * as Location from 'expo-location';
+import * as Haptics from 'expo-haptics';
 import { getPrayerTimes, getNextPrayer } from '../../utils/prayerTimes';
 import { Prayer } from 'adhan';
 import { schedulePrayerNotifications } from '../../utils/notifications';
@@ -11,11 +12,13 @@ import { Ionicons } from '@expo/vector-icons';
 import moment from 'moment-hijri';
 import 'moment/locale/ar';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInUp, useSharedValue, useAnimatedProps, withRepeat, withTiming } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Path, Circle as SvgCircle, Defs, RadialGradient, Stop } from 'react-native-svg';
+
+const AnimatedCircle = Animated.createAnimatedComponent(SvgCircle);
 
 // Configure moment
 moment.locale('ar');
@@ -40,11 +43,57 @@ export default function PrayerTimesScreen() {
     const theme = useTheme();
     const { isDark } = useThemeContext();
     const router = useRouter();
-    const [location, setLocation] = useState<Location.LocationObject | null>(null);
-    const [locationName, setLocationName] = useState<string>('جاري تحديد الموقع...');
+
+    const defaultLocation: Location.LocationObject = {
+        coords: {
+            latitude: 32.987,
+            longitude: 10.339,
+            accuracy: 1,
+            altitude: null,
+            altitudeAccuracy: null,
+            heading: null,
+            speed: null
+        },
+        timestamp: Date.now()
+    };
+
+    const [location, setLocation] = useState<Location.LocationObject | null>(defaultLocation);
+    const [locationName, setLocationName] = useState<string>('غمراسن، تونس');
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [currentTime, setCurrentTime] = useState(new Date());
-    const [prayerTimes, setPrayerTimes] = useState<any>(null);
+    const [prayerTimes, setPrayerTimes] = useState<any>(
+        getPrayerTimes({ latitude: 32.987, longitude: 10.339 })
+    );
+    const [isManualLocation, setIsManualLocation] = useState<boolean>(false);
+    const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
+    const [searchQuery, setSearchQuery] = useState<string>('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [isSearching, setIsSearching] = useState<boolean>(false);
+    const [hasSearched, setHasSearched] = useState<boolean>(false);
+
+    const glowValue = useSharedValue(0);
+
+    useEffect(() => {
+        glowValue.value = withRepeat(
+            withTiming(1, { duration: 2500 }),
+            -1, // infinite loop
+            true // reverse direction (pulse in and out)
+        );
+    }, []);
+
+    const animatedProps1 = useAnimatedProps(() => {
+        return {
+            r: 16 + glowValue.value * 8,
+            opacity: 0.06 + (1 - glowValue.value) * 0.12
+        };
+    });
+
+    const animatedProps2 = useAnimatedProps(() => {
+        return {
+            r: 28 + glowValue.value * 12,
+            opacity: 0.01 + (1 - glowValue.value) * 0.05
+        };
+    });
 
     // Derived state for next prayer to prevent flicker
     const getNextPrayerWithDetails = () => {
@@ -76,12 +125,95 @@ export default function PrayerTimesScreen() {
         return () => clearInterval(interval);
     }, []);
 
+    const fetchLocationAndAddress = async (): Promise<{ location: Location.LocationObject, name: string }> => {
+        // 1. Check if location services (GPS) are enabled on the device
+        const servicesEnabled = await Location.hasServicesEnabledAsync();
+        if (!servicesEnabled) {
+            throw new Error('الرجاء تفعيل الـ GPS لتحديث الموقع');
+        }
+
+        let freshLocation: Location.LocationObject;
+        try {
+            // Force a fresh high-accuracy GPS lookup (Accuracy.High)
+            freshLocation = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Highest,
+            });
+        } catch (e) {
+            console.log('getCurrentPositionAsync High failed, trying Balanced:', e);
+            try {
+                freshLocation = await Location.getCurrentPositionAsync({
+                    accuracy: Location.Accuracy.Balanced,
+                });
+            } catch (err2) {
+                console.log('getCurrentPositionAsync Balanced failed, falling back to getLastKnown:', err2);
+                const lastKnown = await Location.getLastKnownPositionAsync({});
+                const now = Date.now();
+                // Only accept cached location if it is fresh (within 30 minutes = 1800000 ms)
+                if (lastKnown && (now - lastKnown.timestamp) < 1800000) {
+                    freshLocation = lastKnown;
+                } else {
+                    throw new Error('تعذر رصد الموقع. يرجى تفعيل الـ GPS والإنترنت');
+                }
+            }
+        }
+
+        let name = 'الموقع الحالي';
+        // 1. Try OSM Nominatim reverse geocoding for forced Arabic
+        try {
+            const response = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${freshLocation.coords.latitude}&lon=${freshLocation.coords.longitude}&accept-language=ar`,
+                { headers: { 'User-Agent': 'AthkarApp/1.0' } }
+            );
+            const data = await response.json();
+            if (data && data.address) {
+                const addr = data.address;
+                const city = addr.city || addr.town || addr.village || addr.county || addr.state;
+                const country = addr.country;
+                name = [city, country].filter(Boolean).join('، ') || 'الموقع الحالي';
+            } else {
+                throw new Error('OSM returned empty address');
+            }
+        } catch (osmError) {
+            console.log('OSM Geocode failed, falling back to native reverse geocoding:', osmError);
+            // 2. Fallback to Native reverse geocoding
+            try {
+                const address = await Location.reverseGeocodeAsync({
+                    latitude: freshLocation.coords.latitude,
+                    longitude: freshLocation.coords.longitude
+                });
+                if (address && address.length > 0) {
+                    const place = address[0];
+                    let countryArabic = place.country;
+                    if (place.isoCountryCode) {
+                        try {
+                            const regionNames = new Intl.DisplayNames(['ar'], { type: 'region' });
+                            countryArabic = regionNames.of(place.isoCountryCode) || place.country;
+                        } catch (e) { }
+                    }
+                    const parts = [];
+                    if (place.city && place.city !== place.country) parts.push(place.city);
+                    if (countryArabic) parts.push(countryArabic);
+                    name = parts.join('، ') || 'الموقع الحالي';
+                }
+            } catch (nativeError) {
+                console.log('Native reverseGeocode failed:', nativeError);
+            }
+        }
+
+        return { location: freshLocation, name };
+    };
+
     useEffect(() => {
         (async () => {
-            // 1. Try to load from cache immediately
+            // Load from cache immediately
             try {
-                const cachedLocationStr = await AsyncStorage.getItem('cachedLocation');
-                const cachedLocationName = await AsyncStorage.getItem('cachedLocationName');
+                const cachedLocationStr = await AsyncStorage.getItem('location');
+                const cachedLocationName = await AsyncStorage.getItem('location_name');
+                const cachedIsManual = await AsyncStorage.getItem('isManualLocation');
+
+                if (cachedIsManual === 'true') {
+                    setIsManualLocation(true);
+                }
 
                 if (cachedLocationStr) {
                     const cachedLocation = JSON.parse(cachedLocationStr);
@@ -91,117 +223,26 @@ export default function PrayerTimesScreen() {
                         setLocationName(cachedLocationName);
                     }
 
-                    // Calculate times for TODAY based on cached location
-                    // This allows offline usage even if the day has changed
                     const times = getPrayerTimes({
                         latitude: cachedLocation.coords.latitude,
                         longitude: cachedLocation.coords.longitude
                     });
                     setPrayerTimes(times);
+                } else {
+                    // Fallback to Ghomrassen, Tunisia on clean install
+                    setLocation(defaultLocation);
+                    setLocationName('غمراسن، تونس');
+                    const times = getPrayerTimes({
+                        latitude: defaultLocation.coords.latitude,
+                        longitude: defaultLocation.coords.longitude
+                    });
+                    setPrayerTimes(times);
+                    
+                    await AsyncStorage.setItem('location', JSON.stringify(defaultLocation));
+                    await AsyncStorage.setItem('location_name', 'غمراسن، تونس');
                 }
             } catch (e) {
                 console.log('Error loading cached location:', e);
-            }
-
-            // 2. Request permissions and fetch fresh location
-            let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                setErrorMsg('الرجاء السماح بالوصول إلى الموقع');
-                setLocationName('الموقع غير متاح');
-                return;
-            }
-
-            try {
-                let location = await Location.getCurrentPositionAsync({});
-                setLocation(location);
-                // Save to cache for offline use
-                await AsyncStorage.setItem('cachedLocation', JSON.stringify(location));
-
-                // Reverse Geocoding with Arabic Preference (OSM Nominatim)
-                try {
-                    // 1. Try OSM Nominatim API for forced Arabic
-                    // Using fetch is safe as it's a standard web API available in React Native
-                    const response = await fetch(
-                        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${location.coords.latitude}&lon=${location.coords.longitude}&accept-language=ar`,
-                        {
-                            headers: {
-                                'User-Agent': 'AthkarApp/1.0'
-                            }
-                        }
-                    );
-
-                    const data = await response.json();
-
-                    if (data && data.address) {
-                        const addr = data.address;
-                        // Prioritize: City -> Town -> Village -> County -> State
-                        const city = addr.city || addr.town || addr.village || addr.county || addr.state;
-                        const country = addr.country;
-
-                        const parts = [];
-                        if (city) parts.push(city);
-                        if (country) parts.push(country);
-
-                        const name = parts.join('، ') || 'الموقع الحالي';
-                        setLocationName(name);
-                        // Save location name to cache
-                        await AsyncStorage.setItem('cachedLocationName', name);
-                    } else {
-                        throw new Error('No address from OSM');
-                    }
-
-                } catch (osmError) {
-                    // 2. Fallback to Native Geocoder if OSM fails
-                    console.log('OSM Geocode failed, falling back to native:', osmError);
-                    try {
-                        const address = await Location.reverseGeocodeAsync({
-                            latitude: location.coords.latitude,
-                            longitude: location.coords.longitude
-                        });
-
-                        if (address && address.length > 0) {
-                            const place = address[0];
-
-                            // Try to translate country to Arabic via Intl
-                            let countryArabic = place.country;
-                            if (place.isoCountryCode) {
-                                try {
-                                    const regionNames = new Intl.DisplayNames(['ar'], { type: 'region' });
-                                    countryArabic = regionNames.of(place.isoCountryCode) || place.country;
-                                } catch (e) { }
-                            }
-
-                            const parts = [];
-                            if (place.city && place.city !== place.country) parts.push(place.city);
-                            if (countryArabic) parts.push(countryArabic);
-
-                            const name = parts.join('، ') || 'الموقع الحالي';
-                            setLocationName(name);
-                            // Save location name to cache
-                            await AsyncStorage.setItem('cachedLocationName', name);
-                        } else {
-                            setLocationName('الموقع الحالي');
-                        }
-                    } catch (nativeError) {
-                        console.log(nativeError);
-                        setLocationName('الموقع الحالي');
-                    }
-                }
-
-                const times = getPrayerTimes({
-                    latitude: location.coords.latitude,
-                    longitude: location.coords.longitude
-                });
-                setPrayerTimes(times);
-
-                // Schedule prayer notifications
-                await schedulePrayerNotifications(times);
-
-            } catch (locationError) {
-                console.log('Error getting fresh location:', locationError);
-                // If we failed to get fresh location but have cached data, we are fine.
-                // If no cached data, maybe set error message?
-                // For now, we just rely on cached data if available.
             }
         })();
     }, []);
@@ -352,6 +393,12 @@ export default function PrayerTimesScreen() {
     }, []);
 
     const toggleAlarm = async (prayerKey: string) => {
+        try {
+            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        } catch (e) {
+            console.log('Error triggering haptics:', e);
+        }
+
         const nextAlarmState: { [key: string]: 'active' | 'silent' | 'vibrate' } = {
             active: 'silent',
             silent: 'vibrate',
@@ -407,9 +454,9 @@ export default function PrayerTimesScreen() {
     };
 
     const solarProgress = getSolarProgress();
-    const x0 = 20, y0 = 100;
-    const x1 = 170, y1 = 15;
-    const x2 = 320, y2 = 100;
+    const x0 = 10, y0 = 110;
+    const x1 = 200, y1 = -20;
+    const x2 = 390, y2 = 110;
     const t = solarProgress;
     const sunCx = (1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * x1 + t * t * x2;
     const sunCy = (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * y1 + t * t * y2;
@@ -429,43 +476,246 @@ export default function PrayerTimesScreen() {
                 setErrorMsg('الرجاء السماح بالوصول إلى الموقع');
                 return;
             }
-            let freshLocation = await Location.getCurrentPositionAsync({});
-            setLocation(freshLocation);
-            await AsyncStorage.setItem('cachedLocation', JSON.stringify(freshLocation));
             
-            // Fetch name
-            const response = await fetch(
-                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${freshLocation.coords.latitude}&lon=${freshLocation.coords.longitude}&accept-language=ar`,
-                { headers: { 'User-Agent': 'AthkarApp/1.0' } }
-            );
-            const data = await response.json();
-            if (data && data.address) {
-                const addr = data.address;
-                const city = addr.city || addr.town || addr.village || addr.county || addr.state;
-                const country = addr.country;
-                const name = [city, country].filter(Boolean).join('، ') || 'الموقع الحالي';
-                setLocationName(name);
-                await AsyncStorage.setItem('cachedLocationName', name);
-            }
+            const result = await fetchLocationAndAddress();
+            setLocation(result.location);
+            setLocationName(result.name);
+            await AsyncStorage.setItem('location', JSON.stringify(result.location));
+            await AsyncStorage.setItem('location_name', result.name);
             
             const times = getPrayerTimes({
-                latitude: freshLocation.coords.latitude,
-                longitude: freshLocation.coords.longitude
+                latitude: result.location.coords.latitude,
+                longitude: result.location.coords.longitude
             });
             setPrayerTimes(times);
             await schedulePrayerNotifications(times);
-        } catch (error) {
+        } catch (error: any) {
             console.log('Error refreshing location:', error);
-            setLocationName('فشل التحديث');
+            const msg = error?.message || 'فشل التحديث';
+            setLocationName(msg.length < 35 ? msg : 'فشل التحديث');
         }
+    };
+
+    const searchCity = async () => {
+        if (!searchQuery.trim()) return;
+        setIsSearching(true);
+        setHasSearched(true);
+        try {
+            const response = await fetch(
+                `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=5&accept-language=ar`,
+                { headers: { 'User-Agent': 'AthkarApp/1.0' } }
+            );
+            const data = await response.json();
+            setSearchResults(data);
+        } catch (e) {
+            console.log('Error searching city:', e);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const selectCity = async (item: any) => {
+        setIsModalVisible(false);
+        setSearchQuery('');
+        setSearchResults([]);
+        setErrorMsg(null);
+        setHasSearched(false);
+        
+        const nameParts = item.display_name.split(',');
+        const name = (nameParts[0] + (nameParts[1] ? '، ' + nameParts[1] : '')).trim();
+        const lat = parseFloat(item.lat);
+        const lon = parseFloat(item.lon);
+        
+        const manualLoc: any = {
+            coords: {
+                latitude: lat,
+                longitude: lon,
+                accuracy: 1,
+                altitude: null,
+                altitudeAccuracy: null,
+                heading: null,
+                speed: null
+            },
+            timestamp: Date.now()
+        };
+        
+        setLocation(manualLoc);
+        setLocationName(name);
+        setIsManualLocation(true);
+        
+        await AsyncStorage.setItem('location', JSON.stringify(manualLoc));
+        await AsyncStorage.setItem('location_name', name);
+        await AsyncStorage.setItem('isManualLocation', 'true');
+        
+        const times = getPrayerTimes({
+            latitude: lat,
+            longitude: lon
+        });
+        setPrayerTimes(times);
+        await schedulePrayerNotifications(times);
+    };
+
+    const resetToGps = async () => {
+        setIsModalVisible(false);
+        setIsManualLocation(false);
+        setErrorMsg(null);
+        setHasSearched(false);
+        await AsyncStorage.setItem('isManualLocation', 'false');
+        refreshLocation();
+    };
+
+    const renderLocationModal = () => {
+        return (
+            <Modal
+                visible={isModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setIsModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Pressable onPress={() => { setIsModalVisible(false); setHasSearched(false); }} style={styles.closeButton}>
+                                <Ionicons name="close" size={24} color="#FFFFFF" />
+                            </Pressable>
+                            <Text style={styles.modalTitle}>تحديد الموقع</Text>
+                        </View>
+
+                        <View style={styles.searchSection}>
+                            <Text style={styles.searchLabel}>ابحث عن مدينتك لتحديد مواقيت الصلاة بدقة:</Text>
+                            <View style={styles.searchRow}>
+                                <Pressable onPress={searchCity} style={styles.searchBtn}>
+                                    {isSearching ? (
+                                        <ActivityIndicator size="small" color="#FFFFFF" />
+                                    ) : (
+                                        <Ionicons name="search" size={20} color="#FFFFFF" />
+                                    )}
+                                </Pressable>
+                                <TextInput
+                                    style={styles.searchInput}
+                                    placeholder="مثال: غمراسن، تطاوين..."
+                                    placeholderTextColor="rgba(255,255,255,0.3)"
+                                    value={searchQuery}
+                                    onChangeText={setSearchQuery}
+                                    onSubmitEditing={searchCity}
+                                    textAlign="right"
+                                />
+                            </View>
+                        </View>
+
+                        {searchResults.length > 0 ? (
+                            <FlatList
+                                data={searchResults}
+                                keyExtractor={(item) => item.place_id.toString()}
+                                style={styles.resultsList}
+                                renderItem={({ item }) => (
+                                    <Pressable onPress={() => selectCity(item)} style={styles.resultItem}>
+                                        <Ionicons name="map-outline" size={16} color="rgba(255,255,255,0.4)" />
+                                        <Text style={styles.resultText} numberOfLines={1}>
+                                            {item.display_name}
+                                        </Text>
+                                    </Pressable>
+                                )}
+                            />
+                        ) : (
+                            hasSearched && !isSearching && (
+                                <View style={styles.noResultsContainer}>
+                                    <Ionicons name="alert-circle-outline" size={24} color="rgba(255,255,255,0.3)" />
+                                    <Text style={styles.noResultsText}>لم يتم العثور على نتائج للبحث عن &quot;{searchQuery}&quot;</Text>
+                                </View>
+                            )
+                        )}
+
+                        <View style={styles.modalFooter}>
+                            <Pressable onPress={resetToGps} style={styles.gpsButton}>
+                                <Ionicons name="locate-outline" size={18} color="#4DD0E1" />
+                                <Text style={styles.gpsButtonText}>استخدام تحديد الموقع التلقائي (GPS)</Text>
+                            </Pressable>
+                            {isManualLocation && (
+                                <Text style={styles.statusNotice}>أنت تستخدم حالياً موقعاً تم تحديده يدوياً.</Text>
+                            )}
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+        );
     };
 
     if (errorMsg) {
         return (
-            <View style={[styles.container, { backgroundColor: '#121214' }]}>
-                <View style={styles.center}>
-                    <Text style={[styles.errorText, { color: theme.text }]}>{errorMsg}</Text>
+            <View style={[styles.container, { backgroundColor: '#18181B', justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+                <LinearGradient
+                    colors={['rgba(77, 208, 225, 0.08)', 'rgba(24, 24, 27, 1)']}
+                    style={StyleSheet.absoluteFill}
+                />
+                
+                <View style={{ alignItems: 'center', width: '100%', paddingHorizontal: 16 }}>
+                    <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255, 112, 67, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 24, borderWidth: 1, borderColor: 'rgba(255, 112, 67, 0.15)' }}>
+                        <Ionicons name="location-off-outline" size={38} color="#FF7043" />
+                    </View>
+                    
+                    <Text style={styles.errorTitle}>خطأ في تحديد الموقع</Text>
+                    <Text style={styles.errorSubtitle}>{errorMsg}</Text>
                 </View>
+
+                <View style={styles.errorActionCol}>
+                    <Pressable 
+                        onPress={() => {
+                            setIsModalVisible(true);
+                        }}
+                        style={({ pressed }) => [
+                            styles.errorBtn, 
+                            styles.primaryBtn,
+                            pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }
+                        ]}
+                    >
+                        <Ionicons name="search" size={18} color="#121214" style={{ marginLeft: 8 }} />
+                        <Text style={styles.primaryBtnText}>تحديد مدينة يدوياً</Text>
+                    </Pressable>
+                    
+                    <Pressable 
+                        onPress={() => {
+                            setErrorMsg(null);
+                            refreshLocation();
+                        }}
+                        style={({ pressed }) => [
+                            styles.errorBtn, 
+                            styles.secondaryBtn,
+                            pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }
+                        ]}
+                    >
+                        <Ionicons name="refresh" size={18} color="#4DD0E1" style={{ marginLeft: 8 }} />
+                        <Text style={styles.secondaryBtnText}>إعادة محاولة الاتصال بالـ GPS</Text>
+                    </Pressable>
+
+                    <Pressable 
+                        onPress={async () => {
+                            setErrorMsg(null);
+                            setLocation(defaultLocation);
+                            setLocationName('غمراسن، تونس');
+                            setIsManualLocation(true);
+                            await AsyncStorage.setItem('location', JSON.stringify(defaultLocation));
+                            await AsyncStorage.setItem('location_name', 'غمراسن، تونس');
+                            await AsyncStorage.setItem('isManualLocation', 'true');
+                            const defaultTimes = getPrayerTimes({
+                                latitude: 32.987,
+                                longitude: 10.339
+                            });
+                            setPrayerTimes(defaultTimes);
+                        }}
+                        style={({ pressed }) => [
+                            styles.errorBtn, 
+                            styles.tertiaryBtn,
+                            pressed && { opacity: 0.7 }
+                        ]}
+                    >
+                        <Ionicons name="home-outline" size={16} color="rgba(255,255,255,0.5)" style={{ marginLeft: 6 }} />
+                        <Text style={styles.tertiaryBtnText}>استخدام موقع غمراسن (افتراضي)</Text>
+                    </Pressable>
+                </View>
+
+                {renderLocationModal()}
             </View>
         );
     }
@@ -501,7 +751,7 @@ export default function PrayerTimesScreen() {
                 <View style={styles.topDateHeader}>
                     <Text style={styles.gregorianDateText}>{gregorianDate}</Text>
                     <View style={styles.hijriBadgeRow}>
-                        <Ionicons name="calendar-clear-outline" size={15} color="#4DD0E1" style={{ marginLeft: 6 }} />
+                        <Ionicons name="calendar-clear-outline" size={18} color="#4DD0E1" style={{ marginLeft: 6 }} />
                         <Text style={styles.hijriDateText}>{hijriDate}</Text>
                     </View>
                 </View>
@@ -510,7 +760,7 @@ export default function PrayerTimesScreen() {
                 <View style={styles.solarCard}>
                     <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
                     <View style={styles.solarInner}>
-                        <Svg width={width - 40} height="120" viewBox="0 0 340 120" style={styles.solarSvg}>
+                        <Svg width={width - 40} height="120" viewBox="0 0 400 120" style={styles.solarSvg}>
                             <Defs>
                                 <RadialGradient id="sunCore" cx="50%" cy="50%" rx="50%" ry="50%">
                                     <Stop offset="0%" stopColor="#FFFFFF" stopOpacity={coreOpacity} />
@@ -535,6 +785,9 @@ export default function PrayerTimesScreen() {
                             <SvgCircle cx={sunCx} cy={sunCy} r={coronaRadius} fill="url(#sunCorona)" />
                             {/* Luminous Core */}
                             <SvgCircle cx={sunCx} cy={sunCy} r={coreRadius} fill="url(#sunCore)" />
+                            {/* Animated Breathing Corona Flares */}
+                            <AnimatedCircle cx={sunCx} cy={sunCy} fill={activeColor} animatedProps={animatedProps1} />
+                            <AnimatedCircle cx={sunCx} cy={sunCy} fill={activeColor} animatedProps={animatedProps2} />
                         </Svg>
                         
                         <View style={styles.solarMeta}>
@@ -543,7 +796,7 @@ export default function PrayerTimesScreen() {
                             </View>
                             <Text style={[styles.solarPrayerName, { color: activeColor }]}>{currentPrayerName}</Text>
                             <View style={styles.countdownRow}>
-                                <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.45)" style={{ marginLeft: 4 }} />
+                                <Ionicons name="time-outline" size={17} color="rgba(255,255,255,0.45)" style={{ marginLeft: 4 }} />
                                 <Text style={styles.solarCountdown}>متبقي {countdownStr}</Text>
                             </View>
                         </View>
@@ -565,16 +818,26 @@ export default function PrayerTimesScreen() {
                                     style={styles.sunriseCard}
                                 >
                                     <BlurView intensity={10} tint="dark" style={StyleSheet.absoluteFill} />
-                                    <View style={styles.cardContent}>
+                                    <View style={styles.normalCardContent}>
                                         <View style={styles.cardInfoLeft}>
                                             <View style={styles.sunriseIconWrap}>
-                                                <Ionicons name={getPrayerIconName(prayer.key) as any} size={20} color={prayer.color + 'aa'} />
+                                                <Ionicons name={getPrayerIconName(prayer.key) as any} size={20} color={prayer.color} />
                                             </View>
                                             <View>
                                                 <Text style={styles.sunriseTitle}>{prayer.name}</Text>
                                                 <Text style={styles.sunriseTime}>{prayer.time}</Text>
                                             </View>
                                         </View>
+                                        <Pressable
+                                            onPress={() => toggleAlarm(prayer.key)}
+                                            style={styles.normalAlarmButton}
+                                        >
+                                            <Ionicons
+                                                name={getAlarmIcon(alarms[prayer.key])}
+                                                size={18}
+                                                color={prayer.color}
+                                            />
+                                        </Pressable>
                                     </View>
                                 </Animated.View>
                             );
@@ -582,8 +845,15 @@ export default function PrayerTimesScreen() {
 
                         if (isActive) {
                             const timeParts = prayer.time.split(' ');
-                            const timeStr = timeParts[0];
-                            const suffixStr = timeParts[1] || '';
+                            let timeStr = timeParts[0];
+                            let suffixStr = timeParts[1] || '';
+                            if (!suffixStr) {
+                                const match = prayer.time.match(/^([\d:]+)\s*([a-zA-Z\u0625-\u064a]+)?$/);
+                                if (match) {
+                                    timeStr = match[1];
+                                    suffixStr = match[2] || '';
+                                }
+                            }
 
                             return (
                                 <Animated.View
@@ -711,13 +981,13 @@ export default function PrayerTimesScreen() {
             </ScrollView>
 
             {/* Contextual Bottom Location Banner */}
-            <View style={styles.locationBanner}>
+            <Pressable onPress={() => setIsModalVisible(true)} style={styles.locationBanner}>
                 <BlurView intensity={45} tint="dark" style={StyleSheet.absoluteFill} />
                 <View style={styles.locationBannerContent}>
                     <View style={styles.locationInfoLeft}>
                         <Ionicons name="location" size={16} color="#4DD0E1" />
                         <Text style={styles.locationBannerText} numberOfLines={1}>
-                            {locationName}
+                            {locationName} {location?.coords ? `(${location.coords.latitude.toFixed(3)}, ${location.coords.longitude.toFixed(3)})` : ''}
                         </Text>
                     </View>
                     <Pressable
@@ -731,7 +1001,10 @@ export default function PrayerTimesScreen() {
                         <Ionicons name="refresh" size={14} color="#4DD0E1" />
                     </Pressable>
                 </View>
-            </View>
+            </Pressable>
+
+            {/* Location Selector Modal */}
+            {renderLocationModal()}
         </View>
     );
 }
@@ -776,7 +1049,7 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     gregorianDateText: {
-        fontSize: 13,
+        fontSize: 16,
         color: 'rgba(255, 255, 255, 0.45)',
         textTransform: 'uppercase',
         letterSpacing: 1.5,
@@ -794,7 +1067,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
     },
     hijriDateText: {
-        fontSize: 16,
+        fontSize: 20,
         fontWeight: 'bold',
         color: '#4DD0E1',
         fontFamily: 'Tajawal-Bold',
@@ -839,7 +1112,7 @@ const styles = StyleSheet.create({
         fontFamily: 'Tajawal-Medium',
     },
     solarPrayerName: {
-        fontSize: 26,
+        fontSize: 32,
         fontWeight: 'bold',
         fontFamily: 'Tajawal-Bold',
         marginBottom: 4,
@@ -849,7 +1122,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     solarCountdown: {
-        fontSize: 14,
+        fontSize: 18,
         color: 'rgba(255,255,255,0.6)',
         fontFamily: 'Tajawal-Medium',
     },
@@ -961,7 +1234,7 @@ const styles = StyleSheet.create({
         fontFamily: 'Tajawal-Bold',
     },
     activeTimeDisplay: {
-        fontSize: 26,
+        fontSize: 34,
         fontWeight: '800',
         color: '#FFFFFF',
         fontFamily: 'Tajawal-Bold',
@@ -977,6 +1250,8 @@ const styles = StyleSheet.create({
         borderRadius: 18,
         justifyContent: 'center',
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.15)',
     },
     activeCountdown: {
         fontSize: 11,
@@ -1024,7 +1299,14 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     normalAlarmButton: {
-        padding: 8,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
     },
     sunnahContainer: {
         marginTop: 24,
@@ -1106,5 +1388,187 @@ const styles = StyleSheet.create({
         color: '#4DD0E1',
         fontWeight: 'bold',
         fontFamily: 'Tajawal-Bold',
+    },
+    modalOverlay: {
+        flex: 1,
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: 'rgba(20, 20, 24, 0.98)',
+        borderTopLeftRadius: 30,
+        borderTopRightRadius: 30,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.08)',
+        padding: 24,
+        maxHeight: '75%',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    closeButton: {
+        padding: 6,
+        borderRadius: 18,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#FFFFFF',
+        fontFamily: 'Tajawal-Bold',
+    },
+    searchSection: {
+        marginBottom: 16,
+    },
+    searchLabel: {
+        fontSize: 14,
+        color: 'rgba(255,255,255,0.6)',
+        fontFamily: 'Tajawal-Medium',
+        marginBottom: 10,
+        textAlign: 'right',
+    },
+    searchRow: {
+        flexDirection: 'row',
+        backgroundColor: 'rgba(255,255,255,0.04)',
+        borderColor: 'rgba(255,255,255,0.08)',
+        borderWidth: 1,
+        borderRadius: 16,
+        alignItems: 'center',
+        paddingHorizontal: 12,
+    },
+    searchInput: {
+        flex: 1,
+        color: '#FFFFFF',
+        fontFamily: 'Tajawal-Medium',
+        fontSize: 15,
+        paddingVertical: 12,
+        paddingHorizontal: 8,
+    },
+    searchBtn: {
+        padding: 8,
+        backgroundColor: 'rgba(77, 208, 225, 0.2)',
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    resultsList: {
+        maxHeight: 200,
+        marginBottom: 16,
+    },
+    resultItem: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: 10,
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.04)',
+    },
+    resultText: {
+        fontSize: 14,
+        color: 'rgba(255,255,255,0.85)',
+        fontFamily: 'Tajawal-Regular',
+        flex: 1,
+        textAlign: 'right',
+    },
+    modalFooter: {
+        alignItems: 'center',
+        marginTop: 10,
+        gap: 10,
+    },
+    gpsButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: 'rgba(77, 208, 225, 0.1)',
+        borderColor: 'rgba(77, 208, 225, 0.2)',
+        borderWidth: 1,
+        borderRadius: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        width: '100%',
+        justifyContent: 'center',
+    },
+    gpsButtonText: {
+        color: '#4DD0E1',
+        fontSize: 14,
+        fontWeight: 'bold',
+        fontFamily: 'Tajawal-Bold',
+    },
+    statusNotice: {
+        fontSize: 11,
+        color: 'rgba(255,255,255,0.45)',
+        fontFamily: 'Tajawal-Regular',
+        marginTop: 4,
+    },
+    errorTitle: {
+        fontSize: 22,
+        fontFamily: 'Tajawal-Bold',
+        color: '#FFFFFF',
+        marginTop: 16,
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    errorSubtitle: {
+        fontSize: 14,
+        fontFamily: 'Tajawal-Regular',
+        color: 'rgba(255, 255, 255, 0.6)',
+        textAlign: 'center',
+        marginBottom: 32,
+        lineHeight: 20,
+    },
+    errorActionCol: {
+        width: '100%',
+        maxWidth: 280,
+        gap: 12,
+        marginTop: 10,
+    },
+    errorBtn: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 12,
+        width: '100%',
+    },
+    primaryBtn: {
+        backgroundColor: '#4DD0E1',
+    },
+    primaryBtnText: {
+        color: '#121214',
+        fontSize: 15,
+        fontFamily: 'Tajawal-Bold',
+    },
+    secondaryBtn: {
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    secondaryBtnText: {
+        color: '#4DD0E1',
+        fontSize: 15,
+        fontFamily: 'Tajawal-Bold',
+    },
+    tertiaryBtn: {
+        backgroundColor: 'transparent',
+    },
+    tertiaryBtnText: {
+        color: 'rgba(255, 255, 255, 0.6)',
+        fontSize: 14,
+        fontFamily: 'Tajawal-Medium',
+    },
+    noResultsContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 32,
+        gap: 8,
+    },
+    noResultsText: {
+        fontSize: 14,
+        color: 'rgba(255,255,255,0.45)',
+        fontFamily: 'Tajawal-Regular',
+        textAlign: 'center',
     },
 });

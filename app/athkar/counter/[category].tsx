@@ -1,4 +1,6 @@
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Dimensions, Platform, StatusBar, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Dimensions, Platform, StatusBar, Modal, AppState } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KEYS } from '@/utils/storage';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,11 +13,21 @@ import Animated, {
     useAnimatedProps,
     withTiming,
     runOnJS,
+    FadeInUp,
+    FadeInDown,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
 const { width, height } = Dimensions.get('window');
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+const CATEGORY_COLORS: Record<string, string> = {
+    morning: '#FFC107',  // Gold
+    evening: '#7C4DFF',  // Indigo
+    sleep: '#AB47BC',    // Purple/Plum
+    wake_up: '#FF7043',  // Coral
+    prayer: '#10B981',   // Emerald
+};
 
 type AthkarItem = {
     id: string;
@@ -77,7 +89,7 @@ const CircularProgress = ({
                     cx={center}
                     cy={center}
                     r={radius}
-                    stroke={theme.primary}
+                    stroke={color}
                     strokeWidth={strokeWidth}
                     fill="transparent"
                     strokeDasharray={circumference}
@@ -107,6 +119,7 @@ const AthkarCard = ({
     onIncrement,
     theme,
     width,
+    categoryColor,
 }: {
     item: AthkarItem;
     count: number;
@@ -114,6 +127,7 @@ const AthkarCard = ({
     onIncrement: () => void;
     theme: any;
     width: number;
+    categoryColor: string;
 }) => {
     const isCompleted = count >= item.count;
 
@@ -151,7 +165,7 @@ const AthkarCard = ({
                             </Text>
 
                             {item.summary && (
-                                <Text style={[styles.summaryText, { color: theme.primary }]}>{item.summary}</Text>
+                                <Text style={[styles.summaryText, { color: categoryColor }]}>{item.summary}</Text>
                             )}
 
                             <Text style={[styles.referenceText, { color: theme.textSecondary }]}>
@@ -166,17 +180,11 @@ const AthkarCard = ({
                             current={count}
                             target={item.count}
                             theme={theme}
-                            color={theme.primary}
+                            color={categoryColor}
                         />
                     </View>
 
-                    {/* Completion Badge */}
-                    {isCompleted && (
-                        <View style={[styles.completedBadge, { backgroundColor: theme.cardBackground }]}>
-                            <Ionicons name="checkmark-circle" size={28} color={theme.primary} />
-                            <Text style={[styles.completedText, { color: theme.text }]}>Completed</Text>
-                        </View>
-                    )}
+
                 </View>
             </TouchableOpacity>
         </View>
@@ -201,6 +209,83 @@ export default function AthkarCounterScreen() {
         athkarList.reduce((acc, item) => ({ ...acc, [item.id]: 0 }), {})
     );
     const [showList, setShowList] = useState(false);
+    const [isRestored, setIsRestored] = useState(false);
+
+    // --- Persistence: Load saved counts + last index on mount ---
+    useEffect(() => {
+        const loadSavedProgress = async () => {
+            try {
+                const [savedCountsRaw, savedIndexRaw] = await Promise.all([
+                    AsyncStorage.getItem(KEYS.ATHKAR_COUNTS),
+                    AsyncStorage.getItem(KEYS.ATHKAR_LAST_INDEX),
+                ]);
+
+                if (savedCountsRaw) {
+                    const allCounts = JSON.parse(savedCountsRaw);
+                    if (allCounts[category]) {
+                        setCounts(prev => ({ ...prev, ...allCounts[category] }));
+                    }
+                }
+
+                if (savedIndexRaw) {
+                    const allIndexes = JSON.parse(savedIndexRaw);
+                    const savedIdx = allIndexes[category];
+                    if (typeof savedIdx === 'number' && savedIdx >= 0 && savedIdx < athkarList.length) {
+                        setCurrentIndex(savedIdx);
+                        // Scroll to saved position after a short delay to let FlatList mount
+                        setTimeout(() => {
+                            flatListRef.current?.scrollToIndex({ index: savedIdx, animated: false });
+                        }, 100);
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to restore athkar progress:', e);
+            } finally {
+                setIsRestored(true);
+            }
+        };
+        loadSavedProgress();
+    }, [category]);
+
+    // --- Persistence: Save counts whenever they change ---
+    useEffect(() => {
+        if (!isRestored) return; // Don't save during initial load
+        const saveCounts = async () => {
+            try {
+                // 1. Save to permanent resume key
+                const raw = await AsyncStorage.getItem(KEYS.ATHKAR_COUNTS);
+                const allCounts = raw ? JSON.parse(raw) : {};
+                allCounts[category] = counts;
+                await AsyncStorage.setItem(KEYS.ATHKAR_COUNTS, JSON.stringify(allCounts));
+
+                // 2. Also sync to the daily progress key (used by dashboard stats)
+                const dailyKey = `athkar_progress_${new Date().toISOString().split('T')[0]}`;
+                const dailyRaw = await AsyncStorage.getItem(dailyKey);
+                const dailyProgress = dailyRaw ? JSON.parse(dailyRaw) : {};
+                dailyProgress[category] = counts;
+                await AsyncStorage.setItem(dailyKey, JSON.stringify(dailyProgress));
+            } catch (e) {
+                console.error('Failed to save athkar counts:', e);
+            }
+        };
+        saveCounts();
+    }, [counts, isRestored]);
+
+    // --- Persistence: Save last index whenever it changes ---
+    useEffect(() => {
+        if (!isRestored) return;
+        const saveIndex = async () => {
+            try {
+                const raw = await AsyncStorage.getItem(KEYS.ATHKAR_LAST_INDEX);
+                const allIndexes = raw ? JSON.parse(raw) : {};
+                allIndexes[category] = currentIndex;
+                await AsyncStorage.setItem(KEYS.ATHKAR_LAST_INDEX, JSON.stringify(allIndexes));
+            } catch (e) {
+                console.error('Failed to save athkar last index:', e);
+            }
+        };
+        saveIndex();
+    }, [currentIndex, isRestored]);
 
     // Actions
     const handleIncrement = useCallback(() => {
@@ -235,6 +320,9 @@ export default function AthkarCounterScreen() {
         }
     }, [currentIndex, athkarList.length]);
 
+    const categoryColor = CATEGORY_COLORS[category] || theme.primary;
+    const isCategoryCompleted = athkarList.length > 0 && athkarList.every(item => (counts[item.id] || 0) >= item.count);
+
     const renderItem = useCallback(({ item, index }: { item: AthkarItem; index: number }) => (
         <AthkarCard
             item={item}
@@ -243,8 +331,9 @@ export default function AthkarCounterScreen() {
             onIncrement={handleIncrement}
             theme={theme}
             width={width}
+            categoryColor={categoryColor}
         />
-    ), [counts, currentIndex, handleIncrement, theme]);
+    ), [counts, currentIndex, handleIncrement, theme, categoryColor]);
 
     if (athkarList.length === 0) return null;
 
@@ -301,6 +390,16 @@ export default function AthkarCounterScreen() {
                 <Ionicons name="chevron-back" size={16} color={theme.textSecondary} />
             </View>
 
+            {isCategoryCompleted && (
+                <Animated.View 
+                    entering={FadeInUp.springify()} 
+                    style={[styles.completedBadge, { backgroundColor: categoryColor }]}
+                >
+                    <Ionicons name="checkmark-done-circle" size={20} color="#121214" />
+                    <Text style={[styles.completedText, { color: '#121214' }]}>تم إكمال جميع الأذكار</Text>
+                </Animated.View>
+            )}
+
             {/* Bottom Safe Area Spacer */}
             <View style={{ height: 20 }} />
 
@@ -313,7 +412,7 @@ export default function AthkarCounterScreen() {
             >
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { backgroundColor: theme.cardBackground }]}>
-                        <View style={styles.modalHeader}>
+                        <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
                             <Text style={[styles.modalTitle, { color: theme.text }]}>
                                 قائمة الأذكار
                             </Text>
@@ -395,7 +494,7 @@ const styles = StyleSheet.create({
         fontSize: 22,
         fontWeight: 'bold',
         marginBottom: 4,
-        fontFamily: 'Amiri-Bold',
+        fontFamily: 'Tajawal-Bold',
     },
     headerSubtitleText: {
         fontSize: 14,
@@ -437,6 +536,8 @@ const styles = StyleSheet.create({
     referenceText: {
         fontSize: 13,
         marginBottom: 8,
+        fontFamily: 'Tajawal-Regular',
+        lineHeight: 18,
     },
     counterWrapper: {
         height: height * 0.25, // Fixed bottom area (25%) for counter
@@ -458,31 +559,34 @@ const styles = StyleSheet.create({
     progressMainNumber: {
         fontSize: 32,
         fontWeight: '800',
-        fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
+        fontFamily: 'Tajawal-Bold',
         includeFontPadding: false,
     },
     progressLimit: {
         fontSize: 16,
         marginTop: -2,
+        fontFamily: 'Tajawal-Medium',
     },
     completedBadge: {
         position: 'absolute',
-        bottom: 120,
-        flexDirection: 'row',
+        bottom: 110,
+        alignSelf: 'center',
+        flexDirection: 'row-reverse',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 10,
+        paddingHorizontal: 24,
+        paddingVertical: 12,
         borderRadius: 30,
         gap: 8,
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 4,
     },
     completedText: {
         fontWeight: 'bold',
         fontSize: 16,
+        fontFamily: 'Tajawal-Bold',
     },
     swipeHint: {
         flexDirection: 'row-reverse',
@@ -494,6 +598,7 @@ const styles = StyleSheet.create({
     swipeHintText: {
         fontSize: 12,
         fontWeight: '600',
+        fontFamily: 'Tajawal-Medium',
     },
     modalOverlay: {
         flex: 1,
@@ -517,6 +622,7 @@ const styles = StyleSheet.create({
     modalTitle: {
         fontSize: 20,
         fontWeight: '700',
+        fontFamily: 'Tajawal-Bold',
     },
     listItem: {
         flexDirection: 'row-reverse',
@@ -542,6 +648,7 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: '600',
         textAlign: 'right',
+        fontFamily: 'Tajawal-Medium',
     },
     listItemRight: {
         flexDirection: 'row-reverse',
@@ -551,5 +658,6 @@ const styles = StyleSheet.create({
     listItemCount: {
         fontSize: 14,
         fontWeight: '700',
+        fontFamily: 'Tajawal-Bold',
     },
 });

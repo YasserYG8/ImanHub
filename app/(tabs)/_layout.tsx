@@ -82,6 +82,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="journey"
+        options={{
+          title: 'نشاطي',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "bar-chart" : "bar-chart-outline"} size={26} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="menu"
         options={{
           title: 'المزيد',

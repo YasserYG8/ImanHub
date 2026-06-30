@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, ActivityIndicator, Pressable, Platform, Alert, Dimensions } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useThemeColor';
+
+// Dynamic import to bypass Metro web bundle static analysis
+const MAPS_MODULE = 'react-native-maps';
+const MapView = Platform.OS !== 'web' ? require(MAPS_MODULE).default : View;
+const Marker = Platform.OS !== 'web' ? require(MAPS_MODULE).Marker : View;
+const PROVIDER_DEFAULT = Platform.OS !== 'web' ? require(MAPS_MODULE).PROVIDER_DEFAULT : null;
 
 interface Mosque {
     id: number;
@@ -123,28 +128,34 @@ export default function MosquesMap() {
                     </Text>
                 </View>
             ) : (
-                <MapView
-                    style={styles.map}
-                    provider={PROVIDER_DEFAULT}
-                    showsUserLocation={true}
-                    showsMyLocationButton={true}
-                    initialRegion={{
-                        latitude: location.coords.latitude,
-                        longitude: location.coords.longitude,
-                        latitudeDelta: 0.0922, // Zoomed out slightly for 10km
-                        longitudeDelta: 0.0421,
-                    }}
-                >
-                    {mosques.map((mosque) => (
-                        <Marker
-                            key={mosque.id}
-                            coordinate={{ latitude: mosque.lat, longitude: mosque.lon }}
-                            title={mosque.tags?.['name:ar'] || mosque.tags?.name || 'مسجد'}
-                            description={mosque.tags?.name || 'مسجد'}
-                            pinColor="green"
-                        />
-                    ))}
-                </MapView>
+                Platform.OS !== 'web' ? (
+                    <MapView
+                        style={styles.map}
+                        provider={PROVIDER_DEFAULT}
+                        showsUserLocation={true}
+                        showsMyLocationButton={true}
+                        initialRegion={{
+                            latitude: location.coords.latitude,
+                            longitude: location.coords.longitude,
+                            latitudeDelta: 0.0922, // Zoomed out slightly for 10km
+                            longitudeDelta: 0.0421,
+                        }}
+                    >
+                        {mosques.map((mosque) => (
+                            <Marker
+                                key={mosque.id}
+                                coordinate={{ latitude: mosque.lat, longitude: mosque.lon }}
+                                title={mosque.tags?.['name:ar'] || mosque.tags?.name || 'مسجد'}
+                                description={mosque.tags?.name || 'مسجد'}
+                                pinColor="green"
+                            />
+                        ))}
+                    </MapView>
+                ) : (
+                    <View style={styles.loadingContainer}>
+                        <Text style={{ color: theme.text }}>الخرائط غير مدعومة على المتصفح</Text>
+                    </View>
+                )
             )}
 
             {/* Loading Indicator for Mosques */}

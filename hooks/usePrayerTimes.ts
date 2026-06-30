@@ -75,23 +75,38 @@ export function usePrayerTimes(): UsePrayerTimesReturn {
             // 1. Try to load from cache first for immediate display
             try {
                 const cachedLocationStr = await storage.getString(KEYS.LOCATION);
+                let locationObj = { latitude: 32.987, longitude: 10.339 };
                 if (cachedLocationStr) {
-                    const location = JSON.parse(cachedLocationStr);
-                    const times = getPrayerTimes(location);
-                    setPrayerTimes(times);
-
-                    const next = getNextPrayer(times);
-                    const nextInfo: NextPrayerInfo = {
-                        prayer: next.prayer,
-                        time: next.time,
-                        name: PRAYER_NAMES_EN[next.prayer] || 'fajr',
-                        nameAr: PRAYER_NAMES_AR[next.prayer] || 'الفجر',
-                    };
-                    setNextPrayer(nextInfo);
-                    setCurrentPrayer(getCurrentPrayerFromNext(next.prayer));
+                    const parsed = JSON.parse(cachedLocationStr);
+                    if (parsed && parsed.coords) {
+                        locationObj = {
+                            latitude: parsed.coords.latitude,
+                            longitude: parsed.coords.longitude
+                        };
+                    } else if (parsed && typeof parsed.latitude === 'number' && typeof parsed.longitude === 'number') {
+                        locationObj = parsed;
+                    }
                 }
+                const times = getPrayerTimes(locationObj);
+                setPrayerTimes(times);
+
+                const next = getNextPrayer(times);
+                const nextInfo: NextPrayerInfo = {
+                    prayer: next.prayer,
+                    time: next.time,
+                    name: PRAYER_NAMES_EN[next.prayer] || 'fajr',
+                    nameAr: PRAYER_NAMES_AR[next.prayer] || 'الفجر',
+                };
+                setNextPrayer(nextInfo);
+                setCurrentPrayer(getCurrentPrayerFromNext(next.prayer));
             } catch (e) {
                 console.log('Error reading cached location:', e);
+            }
+
+            const cachedIsManual = await storage.getString('isManualLocation');
+            if (cachedIsManual === 'true') {
+                setIsLoading(false);
+                return;
             }
 
             // 2. Fetch fresh location
@@ -102,17 +117,30 @@ export function usePrayerTimes(): UsePrayerTimesReturn {
                 return;
             }
 
-            const location = await Location.getCurrentPositionAsync({});
+            let freshLocation: Location.LocationObject;
+            try {
+                freshLocation = await Location.getCurrentPositionAsync({
+                    accuracy: Location.Accuracy.Balanced,
+                });
+            } catch (e) {
+                console.log('getCurrentPositionAsync failed in hook, falling back to getLastKnown:', e);
+                const lastKnown = await Location.getLastKnownPositionAsync({});
+                if (lastKnown) {
+                    freshLocation = lastKnown;
+                } else {
+                    throw e;
+                }
+            }
 
             // Cache location for next time
             storage.set(KEYS.LOCATION, JSON.stringify({
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude
+                latitude: freshLocation.coords.latitude,
+                longitude: freshLocation.coords.longitude
             }));
 
             const times = getPrayerTimes({
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude
+                latitude: freshLocation.coords.latitude,
+                longitude: freshLocation.coords.longitude
             });
 
             setPrayerTimes(times);

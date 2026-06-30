@@ -7,6 +7,8 @@ export const KEYS = {
     CALCULATION_METHOD: 'calculation_method',
     LAST_READ: 'quran_last_read',
     BOOKMARKS: 'quran_bookmarks',
+    ATHKAR_COUNTS: 'athkar_counts',         // { [category]: { [itemId]: count } }
+    ATHKAR_LAST_INDEX: 'athkar_last_index', // { [category]: number }
 };
 
 // Storage wrapper that mimics MMKV API but uses AsyncStorage
