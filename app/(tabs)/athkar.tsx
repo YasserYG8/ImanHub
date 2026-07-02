@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Dimensions, Image, StatusBar, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Image, StatusBar, ActivityIndicator } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import categories from '../../assets/data/athkar_categories.json';
 import { useTheme } from '@/hooks/useThemeColor';
@@ -8,8 +8,6 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useAthkarProgress } from '@/hooks/useAthkarProgress';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle } from 'react-native-svg';
-
-const { width } = Dimensions.get('window');
 
 // --- Custom Svg Circular Progress Component ---
 const SvgCircularProgress = ({ percentage }: { percentage: number }) => {
@@ -57,7 +55,6 @@ const SvgCircularProgress = ({ percentage }: { percentage: number }) => {
 
 export default function AthkarScreen() {
     const router = useRouter();
-    const theme = useTheme();
     const { getCategoryStats, getTotalStats, refresh, loading } = useAthkarProgress();
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -66,7 +63,7 @@ export default function AthkarScreen() {
     useFocusEffect(
         useCallback(() => {
             refresh();
-        }, [])
+        }, [refresh])
     );
 
     // Get background image source for category cards

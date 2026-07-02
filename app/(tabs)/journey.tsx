@@ -1,18 +1,15 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useThemeColor';
-import { useThemeContext } from '@/context/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getItem, KEYS } from '@/utils/storage';
 import quranData from '@/assets/data/quran/quran.json';
 import { useAthkarProgress } from '@/hooks/useAthkarProgress';
-
-const { width } = Dimensions.get('window');
 
 // --- Custom Svg Circular Progress Ring ---
 const CircularProgress = ({ percentage, color }: { percentage: number; color: string }) => {
@@ -67,7 +64,6 @@ const JUZ_ARABIC_NAMES = [
 export default function JourneyScreen() {
     const theme = useTheme();
     const router = useRouter();
-    const { isDark } = useThemeContext();
     const { getCategoryStats, getTotalStats, refresh } = useAthkarProgress();
     const [selectedTab, setSelectedTab] = useState<'today' | 'week' | 'month' | 'year'>('today');
     const [lastRead, setLastRead] = useState<any | null>(null);
@@ -313,7 +309,7 @@ export default function JourneyScreen() {
                                 activeOpacity={0.8}
                                 onPress={handleContinueReading}
                             >
-                                <Ionicons name="book-open-outline" size={14} color="#121214" />
+                                <Ionicons name="book-outline" size={14} color="#121214" />
                                 <Text style={styles.continueButtonText}>واصل القراءة</Text>
                             </TouchableOpacity>
                         </View>
@@ -393,7 +389,7 @@ export default function JourneyScreen() {
 
                         <View style={styles.quoteContainer}>
                             <Ionicons name="ribbon-outline" size={14} color="#FF7043" />
-                            <Text style={styles.quoteText}>"ألا بذكر الله تطمئن القلوب"</Text>
+                            <Text style={styles.quoteText}>&quot;ألا بذكر الله تطمئن القلوب&quot;</Text>
                         </View>
                     </View>
                 </Animated.View>
@@ -563,7 +559,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 24,
         fontWeight: 'bold',
-        fontFamily: 'Noto Serif Arabic',
+        fontFamily: 'Amiri-Bold',
         color: '#FFFFFF',
     },
     headerSubtitle: {
@@ -879,10 +875,9 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     quoteText: {
-        fontSize: 11,
-        fontStyle: 'italic',
-        fontFamily: 'Noto Serif Arabic',
-        color: 'rgba(255, 255, 255, 0.7)',
+        fontSize: 13, // slightly larger for Amiri legibility
+        fontFamily: 'Amiri-Regular',
+        color: 'rgba(255, 255, 255, 0.8)',
     },
     chartContainer: {
         flexDirection: 'row-reverse',

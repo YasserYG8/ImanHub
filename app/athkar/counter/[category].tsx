@@ -1,8 +1,8 @@
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Dimensions, Platform, StatusBar, Modal, AppState } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Dimensions, Platform, StatusBar, Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { KEYS } from '@/utils/storage';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useThemeColor';
 import { useThemeContext } from '@/context/ThemeContext';
@@ -12,9 +12,7 @@ import Animated, {
     useSharedValue,
     useAnimatedProps,
     withTiming,
-    runOnJS,
     FadeInUp,
-    FadeInDown,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
@@ -62,7 +60,7 @@ const CircularProgress = ({
     // Keep Progress Animation
     useEffect(() => {
         progress.value = withTiming(current / target, { duration: 500 });
-    }, [current, target]);
+    }, [current, target, progress]);
 
     const animatedProps = useAnimatedProps(() => {
         const strokeDashoffset = circumference - (progress.value * circumference);
@@ -201,7 +199,7 @@ export default function AthkarCounterScreen() {
     const flatListRef = useRef<FlatList>(null);
 
     // Get Data
-    const athkarList: AthkarItem[] = (athkarData as any)[category] || [];
+    const athkarList: AthkarItem[] = useMemo(() => (athkarData as any)[category] || [], [category]);
 
     // State
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -245,7 +243,7 @@ export default function AthkarCounterScreen() {
             }
         };
         loadSavedProgress();
-    }, [category]);
+    }, [category, athkarList.length]);
 
     // --- Persistence: Save counts whenever they change ---
     useEffect(() => {
@@ -269,7 +267,7 @@ export default function AthkarCounterScreen() {
             }
         };
         saveCounts();
-    }, [counts, isRestored]);
+    }, [counts, isRestored, category]);
 
     // --- Persistence: Save last index whenever it changes ---
     useEffect(() => {
@@ -285,7 +283,7 @@ export default function AthkarCounterScreen() {
             }
         };
         saveIndex();
-    }, [currentIndex, isRestored]);
+    }, [currentIndex, isRestored, category]);
 
     // Actions
     const handleIncrement = useCallback(() => {

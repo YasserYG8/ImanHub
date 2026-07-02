@@ -42,6 +42,9 @@ function RootLayoutNav() {
                 <Stack.Screen name="duaa/[id]" />
                 <Stack.Screen name="knowledge/index" />
                 <Stack.Screen name="knowledge/[id]" />
+                <Stack.Screen name="tajwid/index" />
+                <Stack.Screen name="tajwid/practice/[ayahId]" />
+                <Stack.Screen name="tajwid/progress" />
                 <Stack.Screen name="+not-found" />
             </Stack>
         </NavThemeProvider>
@@ -52,6 +55,10 @@ export default function RootLayout() {
     const [loaded] = useFonts({
         'Amiri-Regular': require('../assets/fonts/Amiri-Regular.ttf'),
         'Amiri-Bold': require('../assets/fonts/Amiri-Bold.ttf'),
+        'Tajawal-Regular': require('../assets/fonts/Tajawal-Regular.ttf'),
+        'Tajawal-Medium': require('../assets/fonts/Tajawal-Medium.ttf'),
+        'Tajawal-Bold': require('../assets/fonts/Tajawal-Bold.ttf'),
+        'Tajawal-ExtraBold': require('../assets/fonts/Tajawal-ExtraBold.ttf'),
     });
 
     useEffect(() => {

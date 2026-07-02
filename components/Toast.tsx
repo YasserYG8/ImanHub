@@ -41,7 +41,7 @@ const Toast = forwardRef<ToastRef, ToastProps>((props, ref) => {
                 if (finished) runOnJS(setVisible)(false);
             });
         }, 2500);
-    }, [position]);
+    }, [position, opacity, translateY]);
 
     useImperativeHandle(ref, () => ({
         show
@@ -95,6 +95,8 @@ const Toast = forwardRef<ToastRef, ToastProps>((props, ref) => {
         </Animated.View>
     );
 });
+
+Toast.displayName = 'Toast';
 
 const styles = StyleSheet.create({
     container: {

@@ -200,7 +200,7 @@ export default function EventDetailsScreen() {
                             >
                                 {/* Decorative Quote Mark */}
                                 <View style={styles.quoteMarkContainer}>
-                                    <Text style={[styles.quoteMark, { color: colors.primary }]}>"</Text>
+                                    <Text style={[styles.quoteMark, { color: colors.primary }]}>&quot;</Text>
                                 </View>
 
                                 {/* Hadith Text - Centered */}

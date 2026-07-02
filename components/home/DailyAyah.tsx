@@ -108,7 +108,6 @@ export function DailyAyah({ delay = 300 }: DailyAyahProps) {
                         <Ionicons name="refresh" size={18} color={theme.primary} />
                     </TouchableOpacity>
 
-                    {/* Animated Verse Content */}
                     <Animated.View
                         key={verseKey}
                         entering={FadeIn.duration(400)}
@@ -116,11 +115,11 @@ export function DailyAyah({ delay = 300 }: DailyAyahProps) {
                         layout={Layout.springify()}
                         style={styles.quoteContainer}
                     >
-                        <Text style={styles.quoteIcon}>"</Text>
+                        <Text style={styles.quoteIcon}>&quot;</Text>
                         <Text style={[styles.ayahText, { color: theme.text }]}>
                             {verse.text}
                         </Text>
-                        <Text style={[styles.quoteIcon, styles.quoteEnd]}>"</Text>
+                        <Text style={[styles.quoteIcon, styles.quoteEnd]}>&quot;</Text>
                     </Animated.View>
 
                     <View style={styles.footer}>

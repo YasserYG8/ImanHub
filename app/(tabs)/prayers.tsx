@@ -652,7 +652,7 @@ export default function PrayerTimesScreen() {
                 
                 <View style={{ alignItems: 'center', width: '100%', paddingHorizontal: 16 }}>
                     <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255, 112, 67, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 24, borderWidth: 1, borderColor: 'rgba(255, 112, 67, 0.15)' }}>
-                        <Ionicons name="location-off-outline" size={38} color="#FF7043" />
+                        <Ionicons name="location-outline" size={38} color="#FF7043" />
                     </View>
                     
                     <Text style={styles.errorTitle}>خطأ في تحديد الموقع</Text>
